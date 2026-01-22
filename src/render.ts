@@ -96,6 +96,18 @@ async function* listBlocks(client: Client, blockId: string, fetchImage: (file: F
           caption: block.image.caption,
         },
       };
+      // Handle video blocks
+    } else if (block.type === "video") {
+        yield {
+          ...block,
+          video: {
+            type: block.video.type,
+            [block.video.type]: block.video.type === "external"
+              ? block.video.external.url
+              : block.video.file.url,
+              caption: block.video.caption,
+          },
+        };
     } else {
       yield block;
     }
