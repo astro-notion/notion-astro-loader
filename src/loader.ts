@@ -1,4 +1,4 @@
-import type { RehypePlugins } from 'astro';
+import type { AstroIntegrationLogger, RehypePlugins } from 'astro';
 import type { Loader } from 'astro/loaders';
 
 import { Client, isFullPage, iteratePaginatedAPI } from '@notionhq/client';
@@ -6,11 +6,11 @@ import { dim } from 'kleur/colors';
 import * as path from 'node:path';
 
 import { propertiesSchemaForDatabase } from './database-properties.js';
-import { VIRTUAL_CONTENT_ROOT } from './image.js';
-import { buildProcessor, NotionPageRenderer, type RehypePlugin } from './render.js';
+import { VIRTUAL_CONTENT_ROOT } from './asset.js';
+import { buildProcessor, NotionPageRenderer } from './render.js';
 import { notionPageSchema } from './schemas/page.js';
 import * as transformedPropertySchema from './schemas/transformed-properties.js';
-import type { ClientOptions, QueryDatabaseParameters } from './types.js';
+import type { ClientOptions, Page, QueryDatabaseParameters, RehypePlugin } from './types.js';
 
 export interface NotionLoaderOptions
   extends Pick<ClientOptions, 'auth' | 'timeoutMs' | 'baseUrl' | 'notionVersion' | 'fetch' | 'agent'>,
@@ -26,29 +26,11 @@ export interface NotionLoaderOptions
    */
   collectionName?: string;
   /**
-   * The path to save the images.
-   * Defaults to 'public'.
+   * The path to download Notion-hosted files to (file uploads, images, icons).
+   * Defaults to 'assets/notion', downloading files to `src/assets/notion`.
    */
-  publicPath?: string;
-  /**
-   * MUST STORED IN `src` TO BE PROCESSED PROPERLY
-   * The path to save the images relative to `src`.
-   * Defaults to 'assets/images/notion'.
-   */
-  imageSavePath?: string;
-  /**
-   * Whether to cache images in the data.
-   * Defaults to `false`.
-   */
-  experimentalCacheImageInData?: boolean;
-  /**
-   * The root alias for the images.
-   * Defaults to `src`.
-   */
-  experimentalRootSourceAlias?: string;
+  assetPath?: string;
 }
-
-const DEFAULT_IMAGE_SAVE_PATH = 'assets/images/notion';
 
 /**
  * Notion loader for the Astro Content Layer API.
@@ -80,97 +62,92 @@ export function notionLoader({
   filter,
   archived,
   collectionName,
-  imageSavePath = DEFAULT_IMAGE_SAVE_PATH,
+  assetPath = 'assets/notion',
   rehypePlugins = [],
-  experimentalCacheImageInData = false,
-  experimentalRootSourceAlias = 'src',
   ...clientOptions
 }: NotionLoaderOptions): Loader {
-  const notionClient = new Client(clientOptions);
+  // Initialize client for Notion API requests
+  const client = new Client(clientOptions);
 
-  const resolvedRehypePlugins = Promise.all(
-    rehypePlugins.map(async (config) => {
-      let plugin: RehypePlugin | string;
-      let options: any;
-      if (Array.isArray(config)) {
-        [plugin, options] = config;
-      } else {
-        plugin = config;
-      }
+  // Initialize the rehype processor for rendering
+  const processor = buildProcessor(
+    Promise.all(
+      // Load all rehype plugins if needed
+      rehypePlugins.map(async (config) => {
+        let plugin: RehypePlugin | string;
+        let options: any;
+        if (Array.isArray(config)) {
+          [plugin, options] = config;
+        } else {
+          plugin = config;
+        }
 
-      if (typeof plugin === 'string') {
-        plugin = (await import(/* @vite-ignore */ plugin)).default as RehypePlugin;
-      }
-      return [plugin, options] as const;
-    })
+        if (typeof plugin === 'string') {
+          plugin = (await import(/* @vite-ignore */ plugin)).default as RehypePlugin;
+        }
+        return [plugin, options] as const;
+      })
+    )
   );
-  const processor = buildProcessor(resolvedRehypePlugins);
 
   return {
     name: collectionName ? `notion-loader/${collectionName}` : 'notion-loader',
     schema: async () =>
       notionPageSchema({
-        properties: await propertiesSchemaForDatabase(notionClient, database_id),
+        properties: await propertiesSchemaForDatabase(client, database_id),
       }),
-    async load(ctx) {
-      const { store, logger: log_db, parseData } = ctx;
+    load: async ({ store, logger: log_db, parseData }) => {
+      const cachedPageIds = new Set<string>(store.keys());
 
-      const existingPageIds = new Set<string>(store.keys());
-      const renderPromises: Promise<void>[] = [];
+      log_db.info(`Loading database ${dim(`found ${cachedPageIds.size} pages in store`)}`);
 
-      log_db.info(`Loading database ${dim(`found ${existingPageIds.size} pages in store`)}`);
-
-      const pages = iteratePaginatedAPI(notionClient.databases.query, {
+      const pages = iteratePaginatedAPI(client.databases.query, {
         database_id,
         filter_properties,
         sorts,
         filter,
         archived,
       });
+
+      // Number of full pages fetched from API
       let pageCount = 0;
 
+      const renderers: Promise<void>[] = [];
+
       for await (const page of pages) {
-        if (!isFullPage(page)) {
-          continue;
-        }
+        // Only process full pages
+        if (!isFullPage(page)) continue;
 
         pageCount++;
 
-        const log_pg = log_db.fork(`${log_db.label}/${page.id.slice(0, 6)}`);
+        // Fork logger with a unique label for each page
+        const log_pg = getPageLogger(log_db, page.id);
 
-        // Create metadata for logging
-        const titleProp = Object.entries(page.properties).find(([_, property]) => property.type === 'title');
-        const pageTitle = transformedPropertySchema.title.safeParse(titleProp ? titleProp[1] : {});
-        const pageMetadata = [
-          `${pageTitle.success ? '"' + pageTitle.data + '"' : 'Untitled'}`,
-          `(last edited ${page.last_edited_time.slice(0, 10)})`,
-        ].join(' ');
+        const cachedPage = store.get(page.id);
+        const isCached = cachedPageIds.delete(page.id); // used to check which pages were deleted
+        const pageMetadata = getPageMetadata(page);
 
-        const isCached = existingPageIds.delete(page.id);
-        const existingPage = store.get(page.id);
+        const absoluteAssetPath = path.resolve(process.cwd(), 'src', assetPath);
 
         // If the page has been updated, re-render it
-        if (existingPage?.digest !== page.last_edited_time) {
-          const realSavePath = path.resolve(process.cwd(), 'src', imageSavePath);
+        if (cachedPage?.digest !== page.last_edited_time || process.env.FORCE_RERENDER) {
+          // Create renderer for current page
+          const renderer = new NotionPageRenderer(client, page, absoluteAssetPath, log_pg);
 
-          const renderer = new NotionPageRenderer(notionClient, page, realSavePath, log_pg);
+          const renderPromise = renderer.render(processor).then(async ({ data, rendered }) => {
+            if (data === undefined || rendered === undefined) return;
 
-          const data = await parseData(
-            await renderer.getPageData(experimentalCacheImageInData, experimentalRootSourceAlias)
-          );
-
-          const renderPromise = renderer.render(processor).then((rendered) => {
             store.set({
               id: page.id,
               digest: page.last_edited_time,
-              data,
+              data: await parseData(data),
               rendered,
-              filePath: `${VIRTUAL_CONTENT_ROOT}/${page.id}.md`, // 不重要，有就行
+              filePath: `${VIRTUAL_CONTENT_ROOT}/${page.id}.md`,
               assetImports: rendered?.metadata.imagePaths,
             });
           });
 
-          renderPromises.push(renderPromise);
+          renderers.push(renderPromise);
 
           log_pg.info(`${isCached ? 'Updated' : 'Created'} page ${dim(pageMetadata)}`);
         } else {
@@ -178,9 +155,9 @@ export function notionLoader({
         }
       }
 
-      // Remove any pages that have been deleted
-      for (const deletedPageId of existingPageIds) {
-        const log_pg = log_db.fork(`${log_db.label}/${deletedPageId.slice(0, 6)}`);
+      // Remove any pages that were not found in the API
+      for (const deletedPageId of cachedPageIds) {
+        const log_pg = getPageLogger(log_db, deletedPageId);
 
         store.delete(deletedPageId);
         log_pg.info(`Deleted page`);
@@ -188,14 +165,32 @@ export function notionLoader({
 
       log_db.info(`Loaded database ${dim(`fetched ${pageCount} pages from API`)}`);
 
-      if (renderPromises.length === 0) {
-        return;
-      }
+      // Skip rendering if no pages were updated
+      if (renderers.length === 0) return;
 
       // Wait for rendering to complete
-      log_db.info(`Rendering ${renderPromises.length} updated pages`);
-      await Promise.all(renderPromises);
-      log_db.info(`Rendered ${renderPromises.length} pages`);
+      log_db.info(`Rendering ${renderers.length} updated pages`);
+      await Promise.all(renderers);
+      log_db.info(`Rendered ${renderers.length} pages`);
     },
   };
+}
+
+/**
+ * Get the page metadata in a formatted string.
+ */
+function getPageMetadata(page: Page): string {
+  const titleProp = Object.entries(page.properties).find(([_, property]) => property.type === 'title');
+  const pageTitle = transformedPropertySchema.title.safeParse(titleProp ? titleProp[1] : {});
+  return [
+    `${pageTitle.success ? '"' + pageTitle.data + '"' : 'Untitled'}`,
+    `(last edited ${page.last_edited_time.slice(0, 10)})`,
+  ].join(' ');
+}
+
+/**
+ * Get a logger for a specific page, with a unique label based on the page ID.
+ */
+function getPageLogger(log_db: AstroIntegrationLogger, pageId: string) {
+  return log_db.fork(`${log_db.label}/${pageId.slice(0, 3)}..${pageId.slice(-3)}`);
 }
