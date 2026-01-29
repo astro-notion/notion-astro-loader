@@ -10,7 +10,7 @@ on:
     branches:
       - master
 
-# 添加全局权限配置
+# Add global permission configuration
 permissions:
   contents: write
   packages: write
@@ -23,89 +23,90 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
-      
+          node-version: "20.x"
+
       - name: Install pnpm
         run: npm install -g pnpm
-      
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      
+
       - name: Lint and Format Check
         run: |
           # Check formatting with Prettier
           npx prettier --check "src/**/*.{ts,js,json}"
-      
+
       - name: Type Check
         run: npx tsc --noEmit
-      
+
       - name: Run Tests
         run: pnpm test
-      
+
       - name: Build
         run: pnpm build
-  # Job for creating regular releases on push/merge to master
+
+  # Create releases on push/merge to master
   create-release-on-push:
     needs: ci
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
-      
+          node-version: "20.x"
+
       - name: Install pnpm
         run: npm install -g pnpm
-      
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      
+
       - name: Run tests
         run: pnpm test
-      
+
       - name: Configure Git
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-      
+
       - name: Bump patch version
         run: pnpm version patch --no-git-tag-version
-      
+
       - name: Get new version from package.json
         id: package-version
         run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-      
+
       - name: Commit and push version update
         run: |
           git add package.json pnpm-lock.yaml
           git commit -m "Bump version to v${{ steps.package-version.outputs.version }} [skip ci]"
           git push
-      
+
       - name: Build
         run: pnpm build
-      
+
       - name: Setup Node.js with registry
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
-          registry-url: 'https://registry.npmjs.org'
-      
+          node-version: "20.x"
+          registry-url: "https://registry.npmjs.org"
+
       - name: Publish to npm
         run: pnpm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
@@ -115,20 +116,20 @@ jobs:
           generate_release_notes: true
           body: |
             ## 📦 NPM Package
-            https://www.npmjs.com/package/@chlorinec-pkgs/notion-astro-loader/v/${{ steps.package-version.outputs.version }}
-            
+            https://www.npmjs.com/package/@astro-notion/loader/v/${{ steps.package-version.outputs.version }}
+
             ```
-            npm install @chlorinec-pkgs/notion-astro-loader@${{ steps.package-version.outputs.version }}
+            npm install @astro-notion/loader@${{ steps.package-version.outputs.version }}
             ```
-            
+
             or
-            
+
             ```
-            pnpm add @chlorinec-pkgs/notion-astro-loader@${{ steps.package-version.outputs.version }}
+            pnpm add @astro-notion/loader@${{ steps.package-version.outputs.version }}
             ```
           token: ${{ secrets.GITHUB_TOKEN }}
-  
-  # Job for creating test releases with hash tag on pull requests
+
+  # Create test releases with hash tag on pull requests
   create-test-release-on-pr:
     needs: ci
     if: github.event_name == 'pull_request'
@@ -136,33 +137,33 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
-          registry-url: 'https://registry.npmjs.org'
-      
+          node-version: "20.x"
+          registry-url: "https://registry.npmjs.org"
+
       - name: Install pnpm
         run: npm install -g pnpm
-      
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-            
+
       - name: Build
         run: pnpm build
-      
+
       - name: Get short SHA
         id: short-sha
         run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-      
+
       - name: Get package version
         id: package-version
         run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-      
+
       - name: Create test version with hash
         run: pnpm version "${{ steps.package-version.outputs.version }}-pr${{ github.event.pull_request.number }}-${{ steps.short-sha.outputs.sha }}" --no-git-tag-version
-      
+
       - name: Publish to npm with tag
         run: pnpm publish --tag pr-${{ github.event.pull_request.number }} --access public --no-git-checks
         env:

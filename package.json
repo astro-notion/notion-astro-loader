@@ -1,18 +1,18 @@
 {
-  "name": "@chlorinec-pkgs/notion-astro-loader",
+  "name": "@astro-notion/loader",
   "version": "1.1.2",
-  "description": "A fork version of original Notion loader for the Astro Content Layer API. It allows you to load pages from a Notion database then render them as pages in a collection.",
+  "description": "Astro Content Loader to use Notion as a CMS",
   "keywords": [
     "astro-loader",
     "astro",
-    "notion"
+    "notion",
+    "cms"
   ],
-  "homepage": "https://github.com/KiritoKing/notion-astro-loader",
+  "homepage": "https://github.com/astro-notion/notion-astro-loader",
   "bugs": {
-    "url": "https://github.com/KiritoKing/notion-astro-loader/issues",
-    "email": "kiritoclzh@gmail.com"
+    "url": "https://github.com/astro-notion/notion-astro-loader/issues"
   },
-  "repository": "github:KiritoKing/notion-astro-loader",
+  "repository": "github:astro-notion/notion-astro-loader",
   "license": "MIT",
   "type": "module",
   "exports": {
