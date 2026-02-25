@@ -1,4 +1,4 @@
-import type { Client, isFullPage, isFullDatabase } from '@notionhq/client';
+import type { Client, isFullPage, isFullDataSource } from '@notionhq/client';
 
 /**
  * @module
@@ -8,9 +8,9 @@ import type { Client, isFullPage, isFullDatabase } from '@notionhq/client';
 type Asserts<Function> = Function extends (input: any) => input is infer Type ? Type : never;
 
 export type ClientOptions = NonNullable<ConstructorParameters<typeof Client>[0]>;
-export interface QueryDatabaseParameters extends NonNullable<Parameters<Client['databases']['query']>[0]> {}
+export interface QueryDataSourceParameters extends NonNullable<Parameters<Client['dataSources']['query']>[0]> {}
 
-export type DatabasePropertyConfigResponse = Asserts<typeof isFullDatabase>['properties'][string];
+export type DataSourcePropertyConfigResponse = Asserts<typeof isFullDataSource>['properties'][string];
 
 export type PageObjectResponse = Asserts<typeof isFullPage>;
 export type PageProperty = PageObjectResponse['properties'][string];

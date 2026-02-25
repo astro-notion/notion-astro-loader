@@ -5,16 +5,16 @@ import { Client, isFullPage, iteratePaginatedAPI } from '@notionhq/client';
 import { dim } from 'kleur/colors';
 import * as path from 'node:path';
 
-import { propertiesSchemaForDatabase } from './database-properties.js';
+import { propertiesSchemaForDatasource } from './database-properties.js';
 import { VIRTUAL_CONTENT_ROOT } from './image.js';
 import { buildProcessor, NotionPageRenderer, type RehypePlugin } from './render.js';
 import { notionPageSchema } from './schemas/page.js';
 import * as transformedPropertySchema from './schemas/transformed-properties.js';
-import type { ClientOptions, QueryDatabaseParameters } from './types.js';
+import type { ClientOptions, QueryDataSourceParameters } from './types.js';
 
 export interface NotionLoaderOptions
   extends Pick<ClientOptions, 'auth' | 'timeoutMs' | 'baseUrl' | 'notionVersion' | 'fetch' | 'agent'>,
-    Pick<QueryDatabaseParameters, 'database_id' | 'filter_properties' | 'sorts' | 'filter' | 'archived'> {
+    Pick<QueryDataSourceParameters, 'data_source_id' | 'filter_properties' | 'sorts' | 'filter' | 'archived'> {
   /**
    * Pass rehype plugins to customize how the Notion output HTML is processed.
    * You can import and apply the plugin function (recommended), or pass the plugin name as a string.
@@ -53,9 +53,9 @@ const DEFAULT_IMAGE_SAVE_PATH = 'assets/images/notion';
 /**
  * Notion loader for the Astro Content Layer API.
  *
- * It allows you to load pages from a Notion database then render them as pages in a collection.
+ * It allows you to load pages from a Notion dataSource then render them as pages in a collection.
  *
- * @param options Takes in same options as `notionClient.databases.query` and `Client` constructor.
+ * @param options Takes in same options as `notionClient.dataSources.query` and `Client` constructor.
  *
  * @example
  * // src/content/config.ts
@@ -65,7 +65,7 @@ const DEFAULT_IMAGE_SAVE_PATH = 'assets/images/notion';
  * const database = defineCollection({
  *   loader: notionLoader({
  *     auth: import.meta.env.NOTION_TOKEN,
- *     database_id: import.meta.env.NOTION_DATABASE_ID,
+ *     data_source_id: import.meta.env.NOTION_DATASOURCE_ID,
  *     filter: {
  *       property: "Hidden",
  *       checkbox: { equals: false },
@@ -74,7 +74,7 @@ const DEFAULT_IMAGE_SAVE_PATH = 'assets/images/notion';
  * });
  */
 export function notionLoader({
-  database_id,
+  data_source_id,
   filter_properties,
   sorts,
   filter,
@@ -110,7 +110,7 @@ export function notionLoader({
     name: collectionName ? `notion-loader/${collectionName}` : 'notion-loader',
     schema: async () =>
       notionPageSchema({
-        properties: await propertiesSchemaForDatabase(notionClient, database_id),
+        properties: await propertiesSchemaForDatasource(notionClient, data_source_id),
       }),
     async load(ctx) {
       const { store, logger: log_db, parseData } = ctx;
@@ -118,10 +118,10 @@ export function notionLoader({
       const existingPageIds = new Set<string>(store.keys());
       const renderPromises: Promise<void>[] = [];
 
-      log_db.info(`Loading database ${dim(`found ${existingPageIds.size} pages in store`)}`);
+      log_db.info(`Loading datasource ${dim(`found ${existingPageIds.size} pages in store`)}`);
 
-      const pages = iteratePaginatedAPI(notionClient.databases.query, {
-        database_id,
+      const pages = iteratePaginatedAPI(notionClient.dataSources.query, {
+        data_source_id,
         filter_properties,
         sorts,
         filter,
@@ -186,7 +186,7 @@ export function notionLoader({
         log_pg.info(`Deleted page`);
       }
 
-      log_db.info(`Loaded database ${dim(`fetched ${pageCount} pages from API`)}`);
+      log_db.info(`Loaded datasource ${dim(`fetched ${pageCount} pages from API`)}`);
 
       if (renderPromises.length === 0) {
         return;
