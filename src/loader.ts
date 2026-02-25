@@ -5,7 +5,7 @@ import { Client, isFullPage, iteratePaginatedAPI } from '@notionhq/client';
 import { dim } from 'kleur/colors';
 import * as path from 'node:path';
 
-import { propertiesSchemaForDatasource } from './database-properties.js';
+import { propertiesSchemaForDatasource } from './datasource-properties.js';
 import { VIRTUAL_CONTENT_ROOT } from './image.js';
 import { buildProcessor, NotionPageRenderer, type RehypePlugin } from './render.js';
 import { notionPageSchema } from './schemas/page.js';
