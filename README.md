@@ -6,7 +6,7 @@
 >
 > It's currently experimental, and when it's ready, it will be merged into the original repo. If you are in trouble with the same [image issue](https://github.com/withastro/astro/issues/12689), you can try this loader as a drop-in replacement.
 
-[Notion](https://developers.notion.com/) loader for the [Astro Content Layer API](https://astro.build/blog/astro-4140/#experimental-content-layer-api). It allows you to load pages from a Notion database then render them as pages in a collection.
+[Notion](https://developers.notion.com/) loader for the [Astro Content Layer API](https://astro.build/blog/astro-4140/#experimental-content-layer-api). It allows you to load pages from a Notion database, then render them as pages in a collection.
 
 To use the new Astro content layer, you are recommended to use `astro@>=5.0` with stable content layer feature. For legacy users (those who use v4), you need to enable experimental support and use `astro@>=4.14`.
 
@@ -56,26 +56,32 @@ export default defineConfig({
 });
 ```
 
-### Step.2 Get Notion API Token & Database ID
+### Step.2 Get Notion API Token & Data Source ID
 
 You will need to create an [internal Notion integration](https://developers.notion.com/docs/authorization#internal-integration-auth-flow-set-up). You will also want to share your database with the integration.
 
-After you get your notion token and database ID, you need to create a dot-env file in your project root dir to make it available to your loader.
+After you get your notion token and data source ID, you need to create a dot-env file in your project root dir to make it available to your loader.
+
+> **Terminology note**
+>
+> In the newer Notion API/SDK model, a database is a container that can include multiple child data sources.
+> Querying/fetching pages directly from a database is deprecated, so integrations should query a specific data source and provide `data_source_id`.
+> Read Notion's explanation of the model here: [Data sources and linked databases](https://www.notion.com/help/data-sources-and-linked-databases).
 
 ```sh
 # /.env
 NOTION_TOKEN=your-notion-token
-NOTION_DATABASE_ID=your-database-id
+NOTION_DATASOURCE_ID=your-data-source-id
 ```
 
 ### Step.3 Set up Content Layer Config
 
-According to [Astro Doc on Content Collections](https://docs.astro.build/en/guides/content-collections/), you can define a content collection by creating config files following specific patters:
+According to [Astro Doc on Content Collections](https://docs.astro.build/en/guides/content-collections/), you can define a content collection by creating config files following specific patterns:
 
 - `src/content.config.ts` (Recommended, only work on v5 or later)
 - `src/content/config.ts` (Legacy way, work for all users)
 
-Then, you can use the loader loader in your content collection configuration:
+Then, you can use the loader in your content collection configuration:
 
 ```ts
 import { defineCollection } from 'astro:content';
@@ -84,7 +90,7 @@ import { notionLoader } from '@astro-notion/loader';
 const database = defineCollection({
   loader: notionLoader({
     auth: import.meta.env.NOTION_TOKEN,
-    database_id: import.meta.env.NOTION_DATABASE_ID,
+    data_source_id: import.meta.env.NOTION_DATASOURCE_ID,
     // Optional: tell loader where to store downloaded aws images, relative to 'src' directory
     // Default value is 'assets/images/notion'
     imageSavePath: 'assets/images/notion',
@@ -111,10 +117,10 @@ If you are looking for an example, you can check out [my blog repository](https:
 
 ## Options
 
-The `notionLoader` function takes an object with the same options as the [`notionClient.databases.query`](https://developers.notion.com/reference/post-database-query) function, and the same options as the notion [`Client` constructor](https://github.com/makenotion/notion-sdk-js?tab=readme-ov-file#client-options).
+The `notionLoader` function takes an object with the same options as `notionClient.dataSources.query`, and the same options as the notion [`Client` constructor](https://github.com/makenotion/notion-sdk-js?tab=readme-ov-file#client-options).
 
 - `auth`: The API key for your Notion integration.
-- `database_id`: The ID of the database to load pages from.
+- `data_source_id`: The Notion data source ID to load pages from.
 - `imageSavePath`: The directory to save downloaded images into. Default is `assets/images/notion`.
 
 ## Advanced Utilities
@@ -166,7 +172,7 @@ import { notionPageSchema, propertySchema, transformedPropertySchema } from 'not
 const database = defineCollection({
   loader: notionLoader({
     auth: import.meta.env.NOTION_TOKEN,
-    database_id: import.meta.env.NOTION_DATABASE_ID,
+    data_source_id: import.meta.env.NOTION_DATASOURCE_ID,
   }),
   schema: notionPageSchema({
     properties: z.object({
