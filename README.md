@@ -6,13 +6,16 @@
 >
 > It's currently experimental, and when it's ready, it will be merged into the original repo. If you are in trouble with the same [image issue](https://github.com/withastro/astro/issues/12689), you can try this loader as a drop-in replacement.
 
-[Notion](https://developers.notion.com/) loader for the [Astro Content Layer API](https://astro.build/blog/astro-4140/#experimental-content-layer-api). It allows you to load pages from a Notion database, then render them as pages in a collection.
+[Notion](https://developers.notion.com/) loader for the [Astro Content Layer API](https://docs.astro.build/en/guides/content-collections/). It allows you to load pages from a Notion data source, then render them as entries in a collection.
 
-To use the new Astro content layer, you are recommended to use `astro@>=5.0` with stable content layer feature. For legacy users (those who use v4), you need to enable experimental support and use `astro@>=4.14`.
-
-If you want to know more about new content layer API, you can read [Astro's blog about content layer](https://astro.build/blog/future-of-astro-content-layer/).
+This release line targets `astro@>=6 <7` and Node.js `>=22.12.0`.
 
 ## Installation
+
+Requirements:
+
+- Astro `>=6 <7`
+- Node.js `>=22.12.0`
 
 ```sh
 # npm
@@ -33,18 +36,13 @@ If you are also using this loader to create wonderful blogs, please consider to 
 
 ### Step.1 Astro Config
 
-For legacy users who use v4, you need to enable experimental support in your `astro.config.js`, while for new users, you don't need to do this.
-
-Additionally, to make the loader able to process images properly, you need to configure `**.amazonaws.com` pattern in your `astro.config.js`.
+Configure the Notion-hosted image pattern in your `astro.config.js` so Astro can fetch remote images referenced by Notion.
 
 ```js
 // astro.config.js
-import { defineConfig } from 'astro';
+import { defineConfig } from 'astro/config';
 
 export default defineConfig({
-  experimental: {
-    contentLayer: true,
-  },
   image: {
     remotePatterns: [
       {
@@ -76,12 +74,7 @@ NOTION_DATASOURCE_ID=your-data-source-id
 
 ### Step.3 Set up Content Layer Config
 
-According to [Astro Doc on Content Collections](https://docs.astro.build/en/guides/content-collections/), you can define a content collection by creating config files following specific patterns:
-
-- `src/content.config.ts` (Recommended, only work on v5 or later)
-- `src/content/config.ts` (Legacy way, work for all users)
-
-Then, you can use the loader in your content collection configuration:
+Create your content collection config and use the loader in the collection definition:
 
 ```ts
 import { defineCollection } from 'astro:content';
@@ -107,9 +100,9 @@ export const collections = { database };
 
 ### Step.4 Enjoy and Use
 
-Now, you successfully set up your Notion loader, which allows you to load Notion database like a local markdown directory.
+Now, you successfully set up your Notion loader, which allows you to load a Notion data source like a local markdown directory.
 
-Notion loader will automatically fetch pages from Notion database, render them into HTML and generate type-safe schema from database properties for you.
+Notion loader will automatically fetch pages from your Notion data source, render them into HTML and generate a type-safe schema from database properties for you.
 
 You can then use this collection like any other content collection in Astro, with integrated and type-safe DX.
 
@@ -135,13 +128,15 @@ Notion has 2 types of images: file and external url. Notion loader will **not** 
 
 For file urls in **body**, the loader will try to download the images and cache them locally at the `imageSavePath` directory that defined in loader's config. You do not need to care about this process since the loader will do it automatically under the hood.
 
-For file urls in **cover**, the loader will not download it. Instead, you are recommended to use `fileToImageAssets` API exported from the loader and `getImage` or `<Image>` API exported `astro:assets` module to tell Astro to process image while building.
+For file urls in **cover**, the loader will not download them. Instead, use the `fileToImageAsset` helper exported from `@astro-notion/loader` from server-side Astro code to convert the Notion file object into a `GetImageResult`.
+
+`fileToImageAsset` is a server-only helper under Astro 6 because it calls `getImage()` from `astro:assets`. Use it in build-time or server execution paths such as content loaders, `.astro` frontmatter, endpoints, or other server code. Do not use it in hydrated client components or browser-only code.
 
 #### Why & How ?
 
-> TL;TR;
+> TL;DR;
 >
-> The legacy way does not work on `astro@>=5.0` due to `astro:assets` API changes.
+> Cover images need to be processed on the server.
 >
 > By simulating the behavior of `glob` loader, this version of notion loader only "tag" images when building content collections and process it later when render.
 
@@ -151,7 +146,7 @@ So, it's very necessary to cache those images when building and emit them into o
 
 The original version of notion loader do this via `astro:assets` API, and try to use `getImage` function to download and process images.
 
-However, I found it not work on `astro@>=5.0`, since Astro might change the behavior of `astro:assets` API. To solve this problem, I've been learning the source code of `glob` loader and `content-layer` API for a couple of days and finally figure out how to make this work.
+In this fork, the image handling flow stays aligned with Astro's current content layer and asset pipeline instead of relying on older compatibility behavior.
 
 I used to try the solution that downloads the images directly into `public` directory, but I think it's not a good idea since those images cannot take full use of Astro's image optimization service.
 
@@ -166,8 +161,8 @@ This can be used instead of the automatic inference.
 // src/content/config.ts
 import { z } from 'astro/zod';
 import { defineCollection } from 'astro:content';
-import { notionLoader } from 'notion-astro-loader';
-import { notionPageSchema, propertySchema, transformedPropertySchema } from 'notion-astro-loader/schemas';
+import { notionLoader } from '@astro-notion/loader';
+import { notionPageSchema, propertySchema, transformedPropertySchema } from '@astro-notion/loader/schemas';
 
 const database = defineCollection({
   loader: notionLoader({
@@ -193,7 +188,7 @@ A few helper functions are provided for transforming Notion API objects into sim
 
 - `richTextToPlainText` converts [rich text](https://developers.notion.com/reference/rich-text) into plain strings
 - `fileToUrl` converts [file objects](https://developers.notion.com/reference/file-object) to a URL string.
-- `fileToImageAsset` converts [file objects](https://developers.notion.com/reference/file-object) to an image asset using the [Astro Asset API](https://docs.astro.build/en/reference/modules/astro-assets/#getimage).
+- `fileToImageAsset` converts [file objects](https://developers.notion.com/reference/file-object) to an image asset using the [Astro Asset API](https://docs.astro.build/en/reference/modules/astro-assets/#getimage). This helper is server-only under Astro 6.
 - `dateToDateObjects` converts the strings in a [date property](https://developers.notion.com/reference/page-property-values#date) into `Date`s.
 
 ## FAQ

@@ -19,9 +19,9 @@
 
 ## 4. Documentation
 
-- [ ] 4.1 Update README installation and usage guidance to advertise Astro 6 and Node 22 support
-- [ ] 4.2 Remove stale Astro 4 and Astro 5 compatibility guidance that no longer applies to the upgraded release line
-- [ ] 4.3 Document `fileToImageAsset` as a server-only helper under Astro 6
+- [x] 4.1 Update README installation and usage guidance to advertise Astro 6 and Node 22 support
+- [x] 4.2 Remove stale Astro 4 and Astro 5 compatibility guidance that no longer applies to the upgraded release line
+- [x] 4.3 Document `fileToImageAsset` as a server-only helper under Astro 6
 
 ## 5. Verification
 
