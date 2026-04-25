@@ -22,11 +22,11 @@ Astro 6 changes the Content Loader API, raises the Node.js runtime floor, and up
 ### Modified Capabilities
 
 - `notion-loader`: Update the loader interface and compatibility requirements for Astro 6, including dynamic schema creation, supported runtime baselines, and preservation of current loader output semantics.
-- `schema-system`: Update schema requirements so exported schemas and database-derived schemas remain valid and maintain equivalent data contracts under Astro 6's Zod 4 environment.
+- `schema-system`: Update schema requirements so exported schemas and data-source-derived schemas remain valid and maintain equivalent data contracts under Astro 6's Zod 4 environment.
 - `formatters`: Clarify the behavior and usage constraints of `fileToImageAsset` under Astro 6, where `getImage()` is server-only.
 
 ## Impact
 
-- Affected code: `src/loader.ts`, `src/database-properties.ts`, `src/schemas/*.ts`, `src/format.ts`, package entry points, test files, and compatibility-facing documentation.
+- Affected code: `src/loader.ts`, `src/datasource-properties.ts`, `src/schemas/*.ts`, `src/format.ts`, package entry points, test files, and compatibility-facing documentation.
 - Affected tooling: `package.json`, CI workflows, local development/runtime requirements, release expectations, and the `@notionhq/client` dependency baseline.
 - Affected users: consumers upgrading Astro projects to v6, especially those relying on dynamic collection schemas, generated page types, and helper utilities for Notion file objects.

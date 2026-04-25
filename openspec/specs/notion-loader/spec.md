@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provide a fully-featured Astro Content Layer loader that fetches pages from a Notion database, dynamically generates Zod schemas from database properties, renders page content to HTML, and supports incremental loading with caching.
+Provide a fully-featured Astro Content Layer loader that fetches pages from a Notion data source, dynamically generates Zod schemas from data source properties, renders page content to HTML, and supports incremental loading with caching.
 
 ## Requirements
 
@@ -11,8 +11,8 @@ Provide a fully-featured Astro Content Layer loader that fetches pages from a No
 The `notionLoader` function SHALL return a valid Astro `Loader` object that conforms to the Astro Content Layer API specification.
 
 #### Scenario: Loader creation with minimal config
-- **WHEN** `notionLoader` is called with `auth` and `database_id` options
-- **THEN** a loader object with `name`, `schema`, and `load` properties is returned
+- **WHEN** `notionLoader` is called with `auth` and `data_source_id` options
+- **THEN** a loader object with `name`, `createSchema`, and `load` properties is returned
 - **AND** the loader name follows the pattern `notion-loader` or `notion-loader/{collectionName}`
 
 #### Scenario: Loader creation with custom collection name
@@ -31,13 +31,13 @@ The loader SHALL accept all standard Notion SDK client options for authenticatio
 - **WHEN** `notionLoader` is called with options like `timeoutMs`, `baseUrl`, `notionVersion`, `fetch`, or `agent`
 - **THEN** these options are passed to the underlying Notion Client constructor
 
-### Requirement: Database Query Configuration
+### Requirement: Data Source Query Configuration
 
-The loader SHALL accept standard Notion database query parameters for filtering and sorting pages.
+The loader SHALL accept standard Notion data source query parameters for filtering and sorting pages.
 
 #### Scenario: Filter pages by property
 - **WHEN** `notionLoader` is configured with a `filter` option
-- **THEN** only pages matching the filter criteria are loaded from the database
+- **THEN** only pages matching the filter criteria are loaded from the data source
 
 #### Scenario: Sort pages
 - **WHEN** `notionLoader` is configured with a `sorts` option
@@ -47,9 +47,13 @@ The loader SHALL accept standard Notion database query parameters for filtering 
 - **WHEN** `notionLoader` is configured with `filter_properties`
 - **THEN** only the specified properties are included in the response
 
-#### Scenario: Include archived pages
+#### Scenario: Include trashed pages
+- **WHEN** `notionLoader` is configured with `in_trash: true`
+- **THEN** pages in the trash are included in the query results
+
+#### Scenario: Deprecated archived option remains usable
 - **WHEN** `notionLoader` is configured with `archived: true`
-- **THEN** archived pages are included in the query results
+- **THEN** the loader treats it as the same trash-state filter as `in_trash: true`
 
 ### Requirement: Incremental Loading
 
@@ -77,15 +81,15 @@ The loader SHALL support incremental loading by tracking page modifications and 
 
 ### Requirement: Dynamic Schema Generation
 
-The loader SHALL dynamically generate a Zod schema based on the database's property configuration.
+The loader SHALL dynamically generate a Zod schema based on the data source's property configuration.
 
-#### Scenario: Generate schema from database
-- **WHEN** the loader's `schema` method is called
-- **THEN** it retrieves the database configuration from Notion
-- **AND** generates a Zod schema matching the database property types
+#### Scenario: Generate schema from data source
+- **WHEN** the loader's `createSchema` method is called
+- **THEN** it retrieves the data source configuration from Notion
+- **AND** generates a Zod schema matching the data source property types
 
 #### Scenario: Include property descriptions
-- **WHEN** a database property has a description
+- **WHEN** a data source property has a description
 - **THEN** the generated Zod schema includes the description via `.describe()`
 
 ### Requirement: Rehype Plugin Support

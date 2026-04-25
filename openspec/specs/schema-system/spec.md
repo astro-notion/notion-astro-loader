@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provide comprehensive Zod schemas for validating Notion API responses, supporting both raw property validation and transformation to simplified JavaScript types, with dynamic schema generation from database configurations.
+Provide comprehensive Zod schemas for validating Notion API responses, supporting both raw property validation and transformation to simplified JavaScript types, with dynamic schema generation from data source configurations.
 
 ## Requirements
 
@@ -158,11 +158,11 @@ Transformed property schemas SHALL convert raw properties to simplified JavaScri
 
 ### Requirement: Dynamic Schema Generation
 
-The `propertiesSchemaForDatabase` function SHALL generate schemas based on database configuration.
+The `propertiesSchemaForDatasource` function SHALL generate schemas based on data source configuration.
 
-#### Scenario: Generate from database properties
-- **WHEN** called with a Notion client and database ID
-- **THEN** the database properties are retrieved via API
+#### Scenario: Generate from data source properties
+- **WHEN** called with a Notion client and data source ID
+- **THEN** the data source properties are retrieved via API
 - **AND** a Zod object schema is generated with matching property types
 
 #### Scenario: Include property descriptions
@@ -186,17 +186,17 @@ File schemas SHALL validate Notion file objects for external and hosted files.
 Schemas SHALL be exported via multiple package entry points.
 
 #### Scenario: Main schemas export
-- **WHEN** importing from `notion-astro-loader/schemas`
+- **WHEN** importing from `@astro-notion/loader/schemas`
 - **THEN** `pageObjectSchema`, `notionPageSchema`, `propertySchema`, and `transformedPropertySchema` are available
 
 #### Scenario: Raw properties export
-- **WHEN** importing from `notion-astro-loader/schemas/raw-properties`
+- **WHEN** importing from `@astro-notion/loader/schemas/raw-properties`
 - **THEN** all raw property schemas are available
 
 #### Scenario: Transformed properties export
-- **WHEN** importing from `notion-astro-loader/schemas/transformed-properties`
+- **WHEN** importing from `@astro-notion/loader/schemas/transformed-properties`
 - **THEN** all transformed property schemas are available
 
 #### Scenario: Page schemas export
-- **WHEN** importing from `notion-astro-loader/schemas/page`
+- **WHEN** importing from `@astro-notion/loader/schemas/page`
 - **THEN** `pageObjectSchema` and `notionPageSchema` are available

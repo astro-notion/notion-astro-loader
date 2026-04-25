@@ -14,7 +14,7 @@
 ## 3. Schema And Formatter Compatibility
 
 - [x] 3.1 Audit exported schemas for Astro 6 / Zod 4 compatibility and update incompatible schema expressions
-- [x] 3.2 Verify `propertiesSchemaForDatabase` still produces valid database-derived schemas with the same parsed value shapes
+- [x] 3.2 Verify `propertiesSchemaForDatasource` still produces valid data-source-derived schemas with the same parsed value shapes
 - [x] 3.3 Confirm `fileToImageAsset` still works in server-side usage and keep its implementation aligned with Astro 6 expectations
 
 ## 4. Documentation
@@ -33,6 +33,6 @@
 
 - [x] 6.1 Add an Astro 6 collection-definition smoke verification, or equivalent typed fixture, that imports `defineCollection` and uses `notionLoader` so task 2.3 is verified against Astro's actual config path rather than only object shape
 - [x] 6.2 Add targeted `fileToImageAsset` tests that mock `astro:assets` and assert both hosted file URLs and external URLs call `getImage` with `{ src, inferSize: true }`
-- [ ] 6.3 Align the Astro 6 change spec and project guidance with the implemented data source API by replacing stale `database_id`, Astro 5, and database-only wording where it no longer applies
-- [ ] 6.4 Update public API comments and examples in `src/loader.ts` to use the current `@astro-notion/loader` package name and data source terminology
-- [ ] 6.5 Add or explicitly reject `in_trash` support for `notionLoader` data-source query options now that the upgraded Notion SDK marks `archived` as deprecated
+- [x] 6.3 Align the Astro 6 change spec and project guidance with the implemented data source API by replacing stale `database_id`, Astro 5, and database-only wording where it no longer applies
+- [x] 6.4 Update public API comments and examples in `src/loader.ts` to use the current `@astro-notion/loader` package name and data source terminology
+- [x] 6.5 Add or explicitly reject `in_trash` support for `notionLoader` data-source query options now that the upgraded Notion SDK marks `archived` as deprecated

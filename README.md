@@ -56,7 +56,7 @@ export default defineConfig({
 
 ### Step.2 Get Notion API Token & Data Source ID
 
-You will need to create an [internal Notion integration](https://developers.notion.com/docs/authorization#internal-integration-auth-flow-set-up). You will also want to share your database with the integration.
+You will need to create an [internal Notion integration](https://developers.notion.com/docs/authorization#internal-integration-auth-flow-set-up). You will also want to share the relevant Notion workspace content with the integration so it can access the data source you plan to query.
 
 After you get your notion token and data source ID, you need to create a dot-env file in your project root dir to make it available to your loader.
 
@@ -80,7 +80,7 @@ Create your content collection config and use the loader in the collection defin
 import { defineCollection } from 'astro:content';
 import { notionLoader } from '@astro-notion/loader';
 
-const database = defineCollection({
+const posts = defineCollection({
   loader: notionLoader({
     auth: import.meta.env.NOTION_TOKEN,
     data_source_id: import.meta.env.NOTION_DATASOURCE_ID,
@@ -95,18 +95,18 @@ const database = defineCollection({
   }),
 });
 
-export const collections = { database };
+export const collections = { posts };
 ```
 
 ### Step.4 Enjoy and Use
 
 Now, you successfully set up your Notion loader, which allows you to load a Notion data source like a local markdown directory.
 
-Notion loader will automatically fetch pages from your Notion data source, render them into HTML and generate a type-safe schema from database properties for you.
+Notion loader will automatically fetch pages from your Notion data source, render them into HTML, and generate a type-safe schema from the data source properties for you.
 
 You can then use this collection like any other content collection in Astro, with integrated and type-safe DX.
 
-If you are looking for an example, you can check out [my blog repository](https://github.com/chlorinec-pkgs/notion-astro-rev/tree/main/apps/blog), which is also a blog template based on AstroWind and this loader, **allowing you to use any Notion database as your CMS rather than force you to create from an existing template**.
+If you are looking for an example, you can check out [my blog repository](https://github.com/chlorinec-pkgs/notion-astro-rev/tree/main/apps/blog), which is also a blog template based on AstroWind and this loader, **allowing you to use a Notion-backed data source as your CMS rather than forcing you to start from an existing template**.
 
 ## Options
 
@@ -164,7 +164,7 @@ import { defineCollection } from 'astro:content';
 import { notionLoader } from '@astro-notion/loader';
 import { notionPageSchema, propertySchema, transformedPropertySchema } from '@astro-notion/loader/schemas';
 
-const database = defineCollection({
+const posts = defineCollection({
   loader: notionLoader({
     auth: import.meta.env.NOTION_TOKEN,
     data_source_id: import.meta.env.NOTION_DATASOURCE_ID,
@@ -179,7 +179,7 @@ const database = defineCollection({
   }),
 });
 
-export const collections = { database };
+export const collections = { posts };
 ```
 
 ### Formatters

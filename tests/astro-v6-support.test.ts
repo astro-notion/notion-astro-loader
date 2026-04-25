@@ -1,5 +1,17 @@
 /**
- * Verifies Astro 6-facing loader behavior and exported schema compatibility.
+ * Verifies the Astro 6-facing unit-level contract for this package.
+ *
+ * Covered here:
+ * - `notionLoader` naming, `createSchema()` shape, representative schema inference, and stored entry semantics
+ * - data source query option forwarding, including `in_trash` and deprecated `archived` normalization
+ * - representative raw and transformed schema compatibility for URL, date, and datetime properties
+ * - `fileToImageAsset` behavior for hosted and external files via mocked `astro:assets`
+ *
+ * Not covered here:
+ * - real Astro collection integration, real Notion SDK/network behavior, or end-to-end rendering
+ * - rehype plugin loading, actual `NotionPageRenderer` output, or image download/caching internals
+ * - loader error paths, unchanged-page skip behavior, logging details, or precedence when both `in_trash` and `archived` are provided
+ * - exhaustive coverage of all exported property schemas and formatter helpers
  */
 
 import { z } from 'astro/zod';
@@ -9,6 +21,12 @@ import type { NotionPageData } from '../src/types.js';
 
 const notionApi = vi.hoisted(() => ({
   retrieve: vi.fn(),
+  query: vi.fn(),
+  iteratePaginatedAPI: vi.fn(async function* (_query: unknown, _params: unknown) {
+    for (const result of notionApi.queryResults) {
+      yield result;
+    }
+  }),
   queryResults: [] as any[],
 }));
 
@@ -20,18 +38,14 @@ vi.mock('@notionhq/client', () => {
   class Client {
     dataSources = {
       retrieve: notionApi.retrieve,
-      query: vi.fn(),
+      query: notionApi.query,
     };
   }
 
   return {
     Client,
     isFullPage: (page: { object?: string } | null | undefined) => page?.object === 'page',
-    async *iteratePaginatedAPI() {
-      for (const result of notionApi.queryResults) {
-        yield result;
-      }
-    },
+    iteratePaginatedAPI: notionApi.iteratePaginatedAPI,
   };
 });
 
@@ -186,6 +200,8 @@ function createStore(initialEntries: Array<Record<string, any>> = []) {
 
 afterEach(() => {
   notionApi.retrieve.mockReset();
+  notionApi.query.mockReset();
+  notionApi.iteratePaginatedAPI.mockClear();
   notionApi.queryResults = [];
   astroAssets.getImage.mockReset();
   vi.restoreAllMocks();
@@ -268,6 +284,12 @@ describe('notionLoader', () => {
 
     await loader.load({ store, logger, parseData } as never);
 
+    expect(notionApi.iteratePaginatedAPI).toHaveBeenCalledWith(notionApi.query, {
+      data_source_id: 'ds-1',
+      filter_properties: undefined,
+      sorts: undefined,
+      filter: undefined,
+    });
     expect(getPageData).toHaveBeenCalledWith(true, 'content');
     expect(store.delete).toHaveBeenCalledWith('deleted-page');
     expect(store.entries.get(page.id)).toEqual({
@@ -280,6 +302,50 @@ describe('notionLoader', () => {
       rendered,
       filePath: `${VIRTUAL_CONTENT_ROOT}/${page.id}.md`,
       assetImports: rendered.metadata.imagePaths,
+    });
+  });
+
+  it('forwards in_trash to the data source query', async () => {
+    const loader = notionLoader({
+      auth: 'token',
+      data_source_id: 'ds-1',
+      in_trash: true,
+    }) as LoaderWithSchema;
+
+    await loader.load({
+      store: createStore(),
+      logger: createLogger(),
+      parseData: vi.fn(async (entry: unknown) => entry),
+    } as never);
+
+    expect(notionApi.iteratePaginatedAPI).toHaveBeenCalledWith(notionApi.query, {
+      data_source_id: 'ds-1',
+      filter_properties: undefined,
+      sorts: undefined,
+      filter: undefined,
+      in_trash: true,
+    });
+  });
+
+  it('maps deprecated archived queries to in_trash for SDK compatibility', async () => {
+    const loader = notionLoader({
+      auth: 'token',
+      data_source_id: 'ds-1',
+      archived: true,
+    }) as LoaderWithSchema;
+
+    await loader.load({
+      store: createStore(),
+      logger: createLogger(),
+      parseData: vi.fn(async (entry: unknown) => entry),
+    } as never);
+
+    expect(notionApi.iteratePaginatedAPI).toHaveBeenCalledWith(notionApi.query, {
+      data_source_id: 'ds-1',
+      filter_properties: undefined,
+      sorts: undefined,
+      filter: undefined,
+      in_trash: true,
     });
   });
 });

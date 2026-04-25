@@ -2,13 +2,13 @@
 
 ## Purpose
 
-A TypeScript npm package that provides an Astro Content Layer loader for Notion databases. This is a fork of the original Notion loader with fixes for image asset handling that works with Astro 5.0+.
+A TypeScript npm package that provides an Astro Content Layer loader for Notion data sources. This is a fork of the original Notion loader with fixes for image asset handling for the Astro 6 release line.
 
-The loader allows users to load pages from a Notion database and render them as pages in an Astro collection, with automatic schema generation, image caching, and HTML rendering.
+The loader allows users to load pages from a Notion data source and render them as entries in an Astro collection, with automatic schema generation, image caching, and HTML rendering.
 
 ## Tech Stack
 
-- TypeScript (ESM, Node.js 18+)
+- TypeScript (ESM, Node.js 22.12.0+)
 - Astro Content Layer API
 - Notion SDK (`@notionhq/client`)
 - Unified/Rehype ecosystem for HTML processing
@@ -19,7 +19,7 @@ The loader allows users to load pages from a Notion database and render them as 
 
 ### Code Style
 
-- **Files**: kebab-case (`database-properties.ts`)
+- **Files**: kebab-case (`datasource-properties.ts`)
 - **Variables/Functions**: camelCase (`notionLoader`, `buildProcessor`)
 - **Types/Interfaces**: PascalCase (`NotionLoaderOptions`)
 - **Constants**: UPPER_SNAKE_CASE (`DEFAULT_IMAGE_SAVE_PATH`)
@@ -48,7 +48,7 @@ The loader allows users to load pages from a Notion database and render them as 
 
 ### Testing Strategy
 
-- Use Vitest (configured but not yet implemented)
+- Use Vitest for targeted compatibility and regression tests
 - Place test files in `src/**/*.test.ts` or `tests/` directory
 - Mock Notion API calls for unit tests
 - Test schema validation with Zod
@@ -60,8 +60,8 @@ The loader allows users to load pages from a Notion database and render them as 
 
 ## Domain Context
 
-- **Notion Pages**: Each page in a Notion database becomes an entry in the Astro collection
-- **Properties**: Notion database properties are transformed into Zod-validated typed data
+- **Notion Pages**: Each page returned from a Notion data source becomes an entry in the Astro collection
+- **Properties**: Notion data source properties are transformed into Zod-validated typed data
 - **Blocks**: Page content (blocks) are converted to HTML via rehype pipeline
 - **Images**: Notion stores images on AWS S3 with expiring URLs; this loader caches them locally
 
@@ -69,8 +69,8 @@ The loader allows users to load pages from a Notion database and render them as 
 
 - ESM only (all imports need `.js` extensions for local modules)
 - Images must be saved under `src/` directory to be processed by Astro
-- Node.js 18+ required
-- Astro 5.0+ required as peer dependency
+- Node.js 22.12.0+ required
+- Astro `>=6 <7` required as peer dependency
 
 ## External Dependencies
 

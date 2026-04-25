@@ -1,6 +1,6 @@
 ## Context
 
-The package currently implements an Astro 5-era Content Loader and documents support for Astro 5 with Node 18+. The current loader returns an object with `name`, `schema`, and `load`, dynamically generates collection schemas from Notion database metadata, and renders page blocks to HTML while caching Notion-hosted images under `src/` for Astro's asset pipeline.
+The package currently implements an Astro 5-era Content Loader and documents support for Astro 5 with Node 18+. The current loader returns an object with `name`, `schema`, and `load`, dynamically generates collection schemas from Notion data source metadata, and renders page blocks to HTML while caching Notion-hosted images under `src/` for Astro's asset pipeline.
 
 Astro 6 changes several assumptions that this implementation currently depends on:
 
@@ -50,7 +50,7 @@ Alternatives considered:
 
 ### 2. Preserve current loader semantics while swapping to Astro 6's schema creation contract
 
-The implementation will adapt `notionLoader` to Astro 6's loader shape but will preserve the current dynamic schema behavior: retrieve database metadata from Notion, derive a Zod schema, and expose the same page data and rendered output semantics.
+The implementation will adapt `notionLoader` to Astro 6's loader shape but will preserve the current dynamic schema behavior: retrieve data source metadata from Notion, derive a Zod schema, and expose the same page data and rendered output semantics.
 
 Rationale:
 

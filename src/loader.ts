@@ -14,7 +14,7 @@ import type { ClientOptions, DataSourcePropertyConfigResponse, QueryDataSourcePa
 
 export interface NotionLoaderOptions
   extends Pick<ClientOptions, 'auth' | 'timeoutMs' | 'baseUrl' | 'notionVersion' | 'fetch' | 'agent'>,
-    Pick<QueryDataSourceParameters, 'data_source_id' | 'filter_properties' | 'sorts' | 'filter' | 'archived'> {
+    Pick<QueryDataSourceParameters, 'data_source_id' | 'filter_properties' | 'sorts' | 'filter' | 'in_trash' | 'archived'> {
   /**
    * Pass rehype plugins to customize how the Notion output HTML is processed.
    * You can import and apply the plugin function (recommended), or pass the plugin name as a string.
@@ -46,6 +46,15 @@ export interface NotionLoaderOptions
    * Defaults to `src`.
    */
   experimentalRootSourceAlias?: string;
+  /**
+   * Include pages that are in the trash.
+   * Prefer this over `archived`, which is deprecated in the Notion SDK.
+   */
+  in_trash?: QueryDataSourceParameters['in_trash'];
+  /**
+   * @deprecated Use `in_trash` instead.
+   */
+  archived?: QueryDataSourceParameters['archived'];
 }
 
 const DEFAULT_IMAGE_SAVE_PATH = 'assets/images/notion';
@@ -53,16 +62,16 @@ const DEFAULT_IMAGE_SAVE_PATH = 'assets/images/notion';
 /**
  * Notion loader for the Astro Content Layer API.
  *
- * It allows you to load pages from a Notion dataSource then render them as pages in a collection.
+ * It loads pages from a Notion data source and renders them as entries in an Astro collection.
  *
- * @param options Takes in same options as `notionClient.dataSources.query` and `Client` constructor.
+ * @param options Takes the same options as `notionClient.dataSources.query` and the Notion `Client` constructor.
  *
  * @example
  * // src/content/config.ts
  * import { defineCollection } from "astro:content";
- * import { notionLoader } from "notion-astro-loader";
+ * import { notionLoader } from "@astro-notion/loader";
  *
- * const database = defineCollection({
+ * const posts = defineCollection({
  *   loader: notionLoader({
  *     auth: import.meta.env.NOTION_TOKEN,
  *     data_source_id: import.meta.env.NOTION_DATASOURCE_ID,
@@ -78,6 +87,7 @@ export function notionLoader({
   filter_properties,
   sorts,
   filter,
+  in_trash,
   archived,
   collectionName,
   imageSavePath = DEFAULT_IMAGE_SAVE_PATH,
@@ -105,6 +115,14 @@ export function notionLoader({
     })
   );
   const processor = buildProcessor(resolvedRehypePlugins);
+  const pageQuery = {
+    data_source_id,
+    filter_properties,
+    sorts,
+    filter,
+    // Keep the shipped `archived` option working, but forward only the current SDK field.
+    ...(in_trash !== undefined ? { in_trash } : archived !== undefined ? { in_trash: archived } : {}),
+  } satisfies QueryDataSourceParameters;
 
   return {
     name: collectionName ? `notion-loader/${collectionName}` : 'notion-loader',
@@ -126,13 +144,7 @@ export function notionLoader({
 
       log_db.info(`Loading datasource ${dim(`found ${existingPageIds.size} pages in store`)}`);
 
-      const pages = iteratePaginatedAPI(notionClient.dataSources.query, {
-        data_source_id,
-        filter_properties,
-        sorts,
-        filter,
-        archived,
-      });
+      const pages = iteratePaginatedAPI(notionClient.dataSources.query, pageQuery);
       let pageCount = 0;
 
       for await (const page of pages) {

@@ -5,11 +5,11 @@ This file contains essential information for AI coding agents working in this No
 
 ## Project Overview
 
-This is a TypeScript npm package that provides an Astro Content Layer loader for Notion databases. It's a fork of the original Notion loader with fixes for image asset handling.
+This is a TypeScript npm package that provides an Astro Content Layer loader for Notion data sources. It's a fork of the original Notion loader with fixes for image asset handling.
 
 - **Main technologies**: TypeScript, Astro Content Layer API, Notion SDK, Unified/Rehype, Zod
 - **Package manager**: pnpm (required - see packageManager field in package.json)
-- **Module system**: ESM (Node.js 18+)
+- **Module system**: ESM (Node.js 22.12.0+)
 
 ## Essential Commands
 
@@ -32,11 +32,11 @@ pnpm run prepublishOnly
 ### Testing
 
 ```bash
-# Currently no tests implemented
-pnpm run test  # Returns "No tests available"
+# Run the verification suite
+pnpm run test
 ```
 
-Note: Vitest is in devDependencies but not configured. When adding tests, use Vitest.
+Note: Vitest is configured for targeted compatibility coverage. Add new tests there when expanding coverage.
 
 ### Code Quality
 
@@ -78,7 +78,7 @@ import { notionPageSchema } from './schemas/page.js';
 
 ### Naming Conventions
 
-- **Files**: kebab-case (`database-properties.ts`, `image-save-path.ts`)
+- **Files**: kebab-case (`datasource-properties.ts`, `image-save-path.ts`)
 - **Variables/Functions**: camelCase (`notionLoader`, `buildProcessor`)
 - **Types/Interfaces**: PascalCase (`NotionLoaderOptions`, `RenderedNotionEntry`)
 - **Constants**: UPPER_SNAKE_CASE (`DEFAULT_IMAGE_SAVE_PATH`, `VIRTUAL_CONTENT_ROOT`)
@@ -148,7 +148,7 @@ src/
 ├── image.ts              # Image handling utilities
 ├── types.ts              # Internal type definitions
 ├── format.ts             # Data transformation utilities
-├── database-properties.ts # Dynamic schema generation
+├── datasource-properties.ts # Dynamic schema generation
 ├── schemas/              # Zod schemas (exported separately)
 └── rehype/
     └── rehype-images.ts  # Custom rehype plugin

@@ -70,5 +70,5 @@ The `dateToDateObjects` function SHALL convert Notion date strings to JavaScript
 All formatter functions SHALL be exported from the main package entry point.
 
 #### Scenario: Main exports
-- **WHEN** importing from `notion-astro-loader`
+- **WHEN** importing from `@astro-notion/loader`
 - **THEN** `richTextToPlainText`, `fileToUrl`, `fileToImageAsset`, and `dateToDateObjects` are available
