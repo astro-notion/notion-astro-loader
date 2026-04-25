@@ -7,9 +7,9 @@
 
 ## 2. Loader Contract Migration
 
-- [ ] 2.1 Replace the current async `schema` loader property with Astro 6's schema creation contract in `src/loader.ts`
-- [ ] 2.2 Preserve current loader naming, incremental loading, rendered entry shape, and asset import behavior after the contract update
-- [ ] 2.3 Verify the upgraded loader remains usable from an Astro 6 content collection definition without legacy compatibility behavior
+- [x] 2.1 Replace the current async `schema` loader property with Astro 6's schema creation contract in `src/loader.ts`
+- [x] 2.2 Preserve current loader naming, incremental loading, rendered entry shape, and asset import behavior after the contract update
+- [x] 2.3 Verify the upgraded loader remains usable from an Astro 6 content collection definition without legacy compatibility behavior
 
 ## 3. Schema And Formatter Compatibility
 

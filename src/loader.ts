@@ -5,12 +5,12 @@ import { Client, isFullPage, iteratePaginatedAPI } from '@notionhq/client';
 import { dim } from 'kleur/colors';
 import * as path from 'node:path';
 
-import { propertiesSchemaForDatasource } from './datasource-properties.js';
+import { propertiesSchemaForDatasourceProperties } from './datasource-properties.js';
 import { VIRTUAL_CONTENT_ROOT } from './image.js';
 import { buildProcessor, NotionPageRenderer, type RehypePlugin } from './render.js';
 import { notionPageSchema } from './schemas/page.js';
 import * as transformedPropertySchema from './schemas/transformed-properties.js';
-import type { ClientOptions, QueryDataSourceParameters } from './types.js';
+import type { ClientOptions, DataSourcePropertyConfigResponse, QueryDataSourceParameters } from './types.js';
 
 export interface NotionLoaderOptions
   extends Pick<ClientOptions, 'auth' | 'timeoutMs' | 'baseUrl' | 'notionVersion' | 'fetch' | 'agent'>,
@@ -108,10 +108,16 @@ export function notionLoader({
 
   return {
     name: collectionName ? `notion-loader/${collectionName}` : 'notion-loader',
-    schema: async () =>
-      notionPageSchema({
-        properties: await propertiesSchemaForDatasource(notionClient, data_source_id),
-      }),
+    async createSchema() {
+      const dataSource = await notionClient.dataSources.retrieve({ data_source_id });
+
+      return {
+        schema: notionPageSchema({
+          properties: propertiesSchemaForDatasourceProperties(dataSource.properties),
+        }),
+        types: typesForDatasourceProperties(dataSource.properties),
+      };
+    },
     async load(ctx) {
       const { store, logger: log_db, parseData } = ctx;
 
@@ -155,9 +161,8 @@ export function notionLoader({
 
           const renderer = new NotionPageRenderer(notionClient, page, realSavePath, log_pg);
 
-          const data = await parseData(
-            await renderer.getPageData(experimentalCacheImageInData, experimentalRootSourceAlias)
-          );
+          const pageData = await renderer.getPageData(experimentalCacheImageInData, experimentalRootSourceAlias);
+          const data = await parseData(pageData);
 
           const renderPromise = renderer.render(processor).then((rendered) => {
             store.set({
@@ -198,4 +203,30 @@ export function notionLoader({
       log_db.info(`Rendered ${renderPromises.length} pages`);
     },
   };
+}
+
+/**
+ * Generate TypeScript types for the properties of a Notion data source.
+ * The generated types are based on the property configurations of the data source, 
+ * and reference the raw property schemas for each property type.
+ * 
+ * @param properties The properties of the Notion data source returned by the Notion API.
+ * @returns A string containing the TypeScript type definitions for the properties of the Notion data source.
+ */
+function typesForDatasourceProperties(properties: Record<string, DataSourcePropertyConfigResponse>): string {
+  const propertyTypes = Object.entries(properties)
+    .map(([name, property]) => `  ${JSON.stringify(name)}: typeof rawPropertySchema.${property.type};`)
+    .join('\n');
+
+  return `
+import type { z } from 'astro/zod';
+import type { notionPageSchema } from '@astro-notion/loader/schemas/page';
+import type * as rawPropertySchema from '@astro-notion/loader/schemas/raw-properties';
+
+declare const propertiesSchema: z.ZodObject<{
+${propertyTypes}
+}>;
+
+export type Entry = z.infer<ReturnType<typeof notionPageSchema<typeof propertiesSchema>>>;
+  `.trim();
 }
