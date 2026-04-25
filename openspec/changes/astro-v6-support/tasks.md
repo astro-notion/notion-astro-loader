@@ -13,9 +13,9 @@
 
 ## 3. Schema And Formatter Compatibility
 
-- [ ] 3.1 Audit exported schemas for Astro 6 / Zod 4 compatibility and update incompatible schema expressions
-- [ ] 3.2 Verify `propertiesSchemaForDatabase` still produces valid database-derived schemas with the same parsed value shapes
-- [ ] 3.3 Confirm `fileToImageAsset` still works in server-side usage and keep its implementation aligned with Astro 6 expectations
+- [x] 3.1 Audit exported schemas for Astro 6 / Zod 4 compatibility and update incompatible schema expressions
+- [x] 3.2 Verify `propertiesSchemaForDatabase` still produces valid database-derived schemas with the same parsed value shapes
+- [x] 3.3 Confirm `fileToImageAsset` still works in server-side usage and keep its implementation aligned with Astro 6 expectations
 
 ## 4. Documentation
 
