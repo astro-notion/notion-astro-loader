@@ -46,7 +46,8 @@
     "build:watch": "tsc --watch",
     "clean": "crossrm dist tsconfig.tsbuildinfo",
     "prepublishOnly": "pnpm run build",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && pnpm typecheck:tests",
+    "typecheck:tests": "tsc --noEmit -p tests/tsconfig.json",
     "test": "vitest run"
   },
   "dependencies": {
