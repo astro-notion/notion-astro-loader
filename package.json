@@ -47,7 +47,7 @@
     "clean": "crossrm dist tsconfig.tsbuildinfo",
     "prepublishOnly": "pnpm run build",
     "typecheck": "tsc --noEmit",
-    "test": "echo 'No tests available'"
+    "test": "vitest run"
   },
   "dependencies": {
     "@jsdevtools/rehype-toc": "^3.0.2",

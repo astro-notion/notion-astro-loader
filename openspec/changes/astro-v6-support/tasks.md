@@ -25,6 +25,6 @@
 
 ## 5. Verification
 
-- [ ] 5.1 Add targeted unit tests that cover loader creation, dynamic schema generation, and stored entry semantics
-- [ ] 5.2 Add targeted unit tests that cover exported schema compatibility for representative URL/date/datetime properties
-- [ ] 5.3 Run build, type-check, and test verification on the upgraded package and resolve any compatibility regressions
+- [x] 5.1 Add targeted unit tests that cover loader creation, dynamic schema generation, and stored entry semantics
+- [x] 5.2 Add targeted unit tests that cover exported schema compatibility for representative URL/date/datetime properties
+- [x] 5.3 Run build, type-check, and test verification on the upgraded package and resolve any compatibility regressions
