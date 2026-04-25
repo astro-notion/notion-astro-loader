@@ -1,9 +1,9 @@
 ## 1. Runtime Baseline
 
-- [ ] 1.1 Update `package.json` dependency metadata to target Astro 6 with a peer range of `>=6 <7` and the Astro 6 Node.js minimum runtime
-- [ ] 1.2 Update repository CI workflows to run build and type-check steps on a supported Node.js version
-- [ ] 1.3 Upgrade `@notionhq/client` and resolve any code or type adjustments required by the newer SDK
-- [ ] 1.4 Decide and apply the release versioning strategy for the Astro 6-only line
+- [x] 1.1 Update `package.json` dependency metadata to target Astro 6 with a peer range of `>=6 <7` and the Astro 6 Node.js minimum runtime
+- [x] 1.2 Update repository CI workflows to run build and type-check steps on a supported Node.js version
+- [x] 1.3 Upgrade `@notionhq/client` and resolve any code or type adjustments required by the newer SDK
+- [x] 1.4 Decide and apply the release versioning strategy for the Astro 6-only line
 
 ## 2. Loader Contract Migration
 

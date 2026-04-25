@@ -1,6 +1,6 @@
 {
   "name": "@astro-notion/loader",
-  "version": "1.1.2",
+  "version": "2.0.0-beta.1",
   "description": "Astro Content Loader to use Notion as a CMS",
   "keywords": [
     "astro-loader",
@@ -46,11 +46,12 @@
     "build:watch": "tsc --watch",
     "clean": "crossrm dist tsconfig.tsbuildinfo",
     "prepublishOnly": "pnpm run build",
+    "typecheck": "tsc --noEmit",
     "test": "echo 'No tests available'"
   },
   "dependencies": {
     "@jsdevtools/rehype-toc": "^3.0.2",
-    "@notionhq/client": "^5.9.0",
+    "@notionhq/client": "^5.20.0",
     "fs-extra": "^11.3.0",
     "kleur": "^4.1.5",
     "notion-rehype-k": "^1.1.6",
@@ -64,7 +65,7 @@
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
     "@types/slug": "^5.0.9",
-    "astro": "5.0.3",
+    "astro": "6.1.9",
     "crossrm": "^1.0.0",
     "prettier": "^3.5.3",
     "prettier-plugin-astro": "0.14.1",
@@ -74,10 +75,10 @@
     "vitest": "^2.0.5"
   },
   "peerDependencies": {
-    "astro": ">=5.0.0"
+    "astro": ">=6 <7"
   },
   "packageManager": "pnpm@10.28.0+sha512.05df71d1421f21399e053fde567cea34d446fa02c76571441bfc1c7956e98e363088982d940465fd34480d4d90a0668bc12362f8aa88000a64e83d0b0e47be48",
   "engines": {
-    "node": ">=18"
+    "node": ">=22.12.0"
   }
 }

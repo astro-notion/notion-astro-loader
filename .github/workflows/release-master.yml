@@ -21,7 +21,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20.x"
+          node-version: "22.12.0"
 
       - name: Install pnpm
         run: npm install -g pnpm
@@ -32,23 +32,12 @@ jobs:
       - name: Run tests
         run: pnpm test
 
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
+      - name: Type Check
+        run: pnpm typecheck
 
-      - name: Bump patch version
-        run: pnpm version patch --no-git-tag-version
-
-      - name: Get new version from package.json
+      - name: Get version from package.json
         id: package-version
-        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-
-      - name: Commit and push version update
-        run: |
-          git add package.json pnpm-lock.yaml
-          git commit -m "Bump version to v${{ steps.package-version.outputs.version }} [skip ci]"
-          git push
+        run: echo "version=$(node -p 'require(\"./package.json\").version')" >> $GITHUB_OUTPUT
 
       - name: Build
         run: pnpm build
@@ -56,7 +45,7 @@ jobs:
       - name: Setup Node.js with registry
         uses: actions/setup-node@v4
         with:
-          node-version: "20.x"
+          node-version: "22.12.0"
           registry-url: "https://registry.npmjs.org"
 
       - name: Publish to npm
