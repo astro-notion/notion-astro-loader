@@ -1,6 +1,5 @@
 import type { GetImageResult } from 'astro';
-import { getImage } from 'astro:assets';
-import type { AssetObject } from './types.js';
+import type { AssetObject, FileObject } from './types.js';
 
 /**
  * Extract a plain string from a list of rich text items.
@@ -19,7 +18,7 @@ export function richTextToPlainText(data: ReadonlyArray<{ plain_text: string }>)
  *
  * @see https://developers.notion.com/reference/file-object
  */
-export function fileToUrl(file: AssetObject): string;
+export function fileToUrl(file: FileObject): string;
 export function fileToUrl(file: AssetObject | null): string | undefined;
 export function fileToUrl(file: AssetObject | null): string | undefined {
   switch (file?.type) {
@@ -35,12 +34,18 @@ export function fileToUrl(file: AssetObject | null): string | undefined {
 }
 
 /**
- * Extract and locally cache the image from a file object.
+ * Convert a Notion file object to an Astro image asset in a server-side Astro context.
+ * `getImage()` is server-only in Astro 6, so this helper must stay in build, loader,
+ * or other server execution paths.
+ *
  * @see https://developers.notion.com/reference/file-object
  */
-export async function fileToImageAsset(file: AssetObject): Promise<GetImageResult> {
+export async function fileToImageAsset(file: FileObject): Promise<GetImageResult> {
+  const { getImage } = await import('astro:assets');
+  const src = file.type === 'external' ? file.external.url : file.file.url;
+
   return getImage({
-    src: fileToUrl(file),
+    src,
     inferSize: true,
   });
 }

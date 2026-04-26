@@ -1,0 +1,157 @@
+# Capability: Notion Loader
+
+## Purpose
+
+Provide a fully-featured Astro Content Layer loader that fetches pages from a Notion data source, dynamically generates Zod schemas from data source properties, renders page content to HTML, and supports incremental loading with caching.
+
+## Requirements
+
+### Requirement: Runtime Compatibility
+
+The package SHALL declare and verify the runtime versions required to use the loader with Astro 6.
+
+#### Scenario: Package metadata advertises Astro 6 support
+- **WHEN** a consumer inspects the published package metadata
+- **THEN** the Astro peer dependency range is `>=6 <7`
+- **AND** the Node engine constraint targets Astro 6's minimum supported Node.js version
+
+#### Scenario: CI validates supported runtime
+- **WHEN** the package CI workflow runs compatibility checks for the upgraded release line
+- **THEN** build and type-check steps execute on an Astro 6-compatible Node.js version
+
+#### Scenario: Notion SDK baseline is refreshed
+- **WHEN** a consumer installs the upgraded Astro 6 release line
+- **THEN** the package ships with an updated `@notionhq/client` dependency baseline appropriate for the new major release
+
+### Requirement: Astro Loader Interface
+
+The `notionLoader` function SHALL return a valid Astro `Loader` object that conforms to the Astro 6 Content Layer API specification.
+
+#### Scenario: Loader creation with minimal config
+- **WHEN** `notionLoader` is called with `auth` and `data_source_id` options
+- **THEN** a loader object with `name`, `createSchema`, and `load` properties is returned
+- **AND** the loader name follows the pattern `notion-loader` or `notion-loader/{collectionName}`
+
+#### Scenario: Loader creation with custom collection name
+- **WHEN** `notionLoader` is called with a `collectionName` option
+- **THEN** the loader name is `notion-loader/{collectionName}`
+
+#### Scenario: Loader works in Astro 6 collection definitions
+- **WHEN** the returned loader is used in an Astro 6 content collection definition
+- **THEN** Astro accepts the loader without relying on legacy content collection compatibility behavior
+
+### Requirement: Notion Client Configuration
+
+The loader SHALL accept all standard Notion SDK client options for authentication and configuration.
+
+#### Scenario: Authentication with API token
+- **WHEN** `notionLoader` is called with a valid `auth` token
+- **THEN** the loader creates a Notion client that can authenticate with the Notion API
+
+#### Scenario: Custom client options
+- **WHEN** `notionLoader` is called with options like `timeoutMs`, `baseUrl`, `notionVersion`, `fetch`, or `agent`
+- **THEN** these options are passed to the underlying Notion Client constructor
+
+### Requirement: Data Source Query Configuration
+
+The loader SHALL accept standard Notion data source query parameters for filtering, sorting, and trash state.
+
+#### Scenario: Filter pages by property
+- **WHEN** `notionLoader` is configured with a `filter` option
+- **THEN** only pages matching the filter criteria are loaded from the data source
+
+#### Scenario: Sort pages
+- **WHEN** `notionLoader` is configured with a `sorts` option
+- **THEN** pages are returned in the specified sort order
+
+#### Scenario: Filter specific properties
+- **WHEN** `notionLoader` is configured with `filter_properties`
+- **THEN** only the specified properties are included in the response
+
+#### Scenario: Include trashed pages
+- **WHEN** `notionLoader` is configured with `in_trash: true`
+- **THEN** pages in the trash are included in the query results
+
+#### Scenario: Deprecated archived option remains usable
+- **WHEN** `notionLoader` is configured with `archived: true`
+- **THEN** the loader treats it as the same trash-state filter as `in_trash: true`
+
+### Requirement: Incremental Loading
+
+The loader SHALL support incremental loading by tracking page modifications and only re-rendering changed pages.
+
+#### Scenario: Skip unchanged pages
+- **WHEN** a page exists in the store with the same `last_edited_time` as the API response
+- **THEN** the page is skipped and not re-rendered
+- **AND** a debug message is logged
+
+#### Scenario: Update changed pages
+- **WHEN** a page exists in the store but has a different `last_edited_time` than the API response
+- **THEN** the page is re-rendered and updated in the store
+- **AND** an info message noting the update is logged
+
+#### Scenario: Create new pages
+- **WHEN** a page from the API does not exist in the store
+- **THEN** the page is rendered and added to the store
+- **AND** an info message noting the creation is logged
+
+#### Scenario: Delete removed pages
+- **WHEN** a page exists in the store but is not returned by the API
+- **THEN** the page is deleted from the store
+- **AND** an info message noting the deletion is logged
+
+### Requirement: Dynamic Schema Generation
+
+The loader SHALL dynamically generate a Zod schema based on the data source's property configuration using Astro 6's schema creation contract.
+
+#### Scenario: Generate schema from data source
+- **WHEN** the loader's `createSchema` method is called
+- **THEN** it retrieves the data source configuration from Notion
+- **AND** generates a Zod schema matching the data source property types
+
+#### Scenario: Include property descriptions
+- **WHEN** a data source property has a description
+- **THEN** the generated Zod schema includes the description via `.describe()`
+
+#### Scenario: Preserve schema inference inputs
+- **WHEN** Astro 6 consumes the schema returned by `createSchema`
+- **THEN** the schema preserves the same property names and parsed value shapes as the pre-upgrade loader contract
+
+### Requirement: Rehype Plugin Support
+
+The loader SHALL allow custom rehype plugins to be passed for HTML post-processing.
+
+#### Scenario: Apply string-based plugin
+- **WHEN** `rehypePlugins` includes a plugin specified as a string
+- **THEN** the plugin is dynamically imported and applied to the processor
+
+#### Scenario: Apply function-based plugin
+- **WHEN** `rehypePlugins` includes a plugin specified as a function
+- **THEN** the plugin function is used directly
+
+#### Scenario: Apply plugin with options
+- **WHEN** `rehypePlugins` includes a plugin in `[plugin, options]` array format
+- **THEN** the plugin is applied with the specified options
+
+### Requirement: Store Entry Format
+
+The loader SHALL store rendered pages with the correct entry format including content, metadata, and asset references.
+
+#### Scenario: Store entry structure
+- **WHEN** a page is stored
+- **THEN** the entry includes `id`, `digest`, `data`, `rendered`, `filePath`, and `assetImports`
+- **AND** `digest` is set to `last_edited_time` for change detection
+- **AND** `assetImports` contains paths to images used in the page
+
+### Requirement: Logging
+
+The loader SHALL provide structured logging with per-page context and forked loggers.
+
+#### Scenario: Database-level logging
+- **WHEN** the load process starts
+- **THEN** an info message with the count of existing pages is logged
+
+#### Scenario: Page-level logging
+- **WHEN** processing a page
+- **THEN** a forked logger with the page ID prefix is used
+- **AND** page title and last edited date are included in log messages

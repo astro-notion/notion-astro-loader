@@ -1,26 +1,26 @@
-import { isFullBlock, iteratePaginatedAPI, type Client } from '@notionhq/client';
 import type { AstroIntegrationLogger, MarkdownHeading } from 'astro';
-import { type ParseDataOptions } from 'astro/loaders';
-import { dim } from 'kleur/colors';
-
-import { downloadFile, resolveAssetPath } from './asset.js';
-import { type AssetObject, type NotionPageData, type Page, type RehypePlugin } from './types.js';
-import { awaitAll } from './utils.js';
+import type { ParseDataOptions } from 'astro/loaders';
 
 // #region Processor
 import * as fse from 'fs-extra';
-import { unified } from 'unified';
-import { type VFile } from 'vfile';
-
-import notionRehype from '@ntcho/notion-rehype';
+import notionRehype from 'notion-rehype-k';
 import rehypeKatex from 'rehype-katex';
 import rehypeSlug from 'rehype-slug';
 import rehypeStringify from 'rehype-stringify';
+import { unified, type Plugin } from 'unified';
+import type { VFile } from 'vfile';
 
 import type { HtmlElementNode, ListNode, TextNode } from '@jsdevtools/rehype-toc';
 import { toc as rehypeToc } from '@jsdevtools/rehype-toc';
+import { isFullBlock, iteratePaginatedAPI, type Client } from '@notionhq/client';
+import { dim } from 'kleur/colors';
 
-import { rehypeAssets } from './rehype/rehype-assets.js';
+import { fileToUrl } from './format.js';
+import { saveImageFromAWS, transformImagePathForCover } from './image.js';
+import { rehypeImages } from './rehype/rehype-images.js';
+import type { AssetObject, FileObject, NotionPageData, PageObjectResponse } from './types.js';
+
+export type RehypePlugin = Plugin<any[], any>;
 
 const baseProcessor = unified()
   // @ts-ignore
@@ -47,10 +47,113 @@ export function buildProcessor(rehypePlugins: Promise<ReadonlyArray<readonly [Re
     return processor;
   });
 
-  return async function process(blocks: unknown[], assetPaths: string[]) {
-    const processor = await processorPromise.then((p) => p().use(rehypeAssets(), { assetPaths }));
+  return async function process(blocks: unknown[], imagePaths: string[]) {
+    const processor = await processorPromise.then((p) => p().use(rehypeImages(), { imagePaths }));
     const vFile = (await processor.process({ data: blocks } as Record<string, unknown>)) as VFile;
     return { vFile, headings };
+  };
+}
+
+async function awaitAll<T>(iterable: AsyncIterable<T>) {
+  const result: T[] = [];
+  for await (const item of iterable) {
+    result.push(item);
+  }
+  return result;
+}
+
+/**
+ * Return a generator that yields all blocks in a Notion page, recursively.
+ *
+ * @param client Notion API client.
+ * @param blockId ID of block to get children for.
+ * @param fetchAsset Function that fetches an asset and returns an updated Notion asset object.
+ * @returns Full Notion blocks with asset URLs transformed for rendering.
+ */
+async function* listBlocks(client: Client, blockId: string, fetchAsset: <T extends AssetObject>(asset: T) => Promise<T>) {
+  for await (const block of iteratePaginatedAPI(client.blocks.children.list, {
+    block_id: blockId,
+  })) {
+    if (!isFullBlock(block)) {
+      continue;
+    }
+
+    if (block.has_children) {
+      const children = await awaitAll(listBlocks(client, block.id, fetchAsset));
+
+      // @ts-ignore -- children doesn't exist in the type definition.
+      block[block.type].children = children;
+    }
+
+    switch (block.type) {
+      case 'file':
+        yield { ...block, file: await getRenderableAsset(block.file, fetchAsset) };
+        break;
+      case 'image':
+        yield { ...block, image: await getRenderableAsset(block.image, fetchAsset) };
+        break;
+      case 'video':
+        yield { ...block, video: await getRenderableAsset(block.video, fetchAsset) };
+        break;
+      case 'audio':
+        yield { ...block, audio: await getRenderableAsset(block.audio, fetchAsset) };
+        break;
+      case 'callout':
+        yield {
+          ...block,
+          callout: {
+            ...block.callout,
+            icon: block.callout.icon ? await getRenderableIcon(block.callout.icon, fetchAsset) : block.callout.icon,
+          },
+        };
+        break;
+      default:
+        yield block;
+    }
+  }
+}
+
+async function getRenderableAsset<T extends FileObject>(
+  asset: T,
+  fetchAsset: <Asset extends AssetObject>(asset: Asset) => Promise<Asset>
+) {
+  const fetchedAsset = await fetchAsset(asset);
+  const url = fileToUrl(fetchedAsset);
+
+  if (!url) {
+    return asset;
+  }
+
+  // notion-rehype-k expects the selected file field as a URL string instead of a Notion file object.
+  return {
+    ...asset,
+    type: fetchedAsset.type,
+    [fetchedAsset.type]: url,
+  };
+}
+
+async function getRenderableIcon<T extends AssetObject>(
+  icon: T,
+  fetchAsset: <Asset extends AssetObject>(asset: Asset) => Promise<Asset>
+) {
+  if (icon.type === 'emoji') {
+    return icon;
+  }
+
+  const fetchedIcon = await fetchAsset(icon);
+  const url = fileToUrl(fetchedIcon);
+
+  if (!url) {
+    return { type: 'emoji' as const, emoji: '' };
+  }
+
+  if (fetchedIcon.type === 'custom_emoji') {
+    return { type: 'external' as const, external: url };
+  }
+
+  return {
+    type: fetchedIcon.type,
+    [fetchedIcon.type]: url,
   };
 }
 
@@ -87,57 +190,116 @@ function extractTocHeadings(toc: HtmlElementNode): MarkdownHeading[] {
  *
  * Extends `RenderedContent` object: https://docs.astro.build/en/reference/content-loader-reference/#rendered
  */
-export interface RenderedNotionPage {
+export interface RenderedNotionEntry {
   /** Rendered HTML string. If present then `render(entry)` will return a component that renders this HTML. */
   html: string;
   metadata: {
-    /**
-     * Any images that are present in this entry. Relative to the DataEntry filePath.
-     * NOTE: chanigng this to `assetPaths` will break the Astro Content Loader API
-     */
+    /** Any images that are present in this entry. Relative to the DataEntry filePath. */
     imagePaths: string[];
     /** Any headings that are present in this file. Returned as `headings` from `render()` */
     headings: MarkdownHeading[];
-    /** List of Notion blocks that were rendered in the HTML. */
-    blocks: any[];
   };
 }
 
 export class NotionPageRenderer {
   #assetPaths: string[] = [];
-  #assetAnalytics = { download: 0, cached: 0 };
+  #assetAnalytics = {
+    download: 0,
+    cached: 0,
+  };
   #logger: AstroIntegrationLogger;
 
   /**
    * @param client Notion API client.
    * @param page Notion page object including page ID and properties. Does not include blocks.
-   * @param parentLogger Logger to use for logging messages.
+   * @param imageSavePath Directory where Notion-hosted assets are saved.
+   * @param logger Logger to use for rendering messages.
    */
   constructor(
     private readonly client: Client,
-    private readonly page: Page,
-    public readonly assetPath: string,
+    private readonly page: PageObjectResponse,
+    public readonly imageSavePath: string,
     logger: AstroIntegrationLogger
   ) {
     this.#logger = logger.fork(`${logger.label}/render`);
   }
 
   /**
+   * Return page properties for Astro to use.
+   *
+   * @param transformCoverImage Whether Notion-hosted cover images should be saved and rewritten.
+   * @param rootAlias Alias prepended to transformed cover image paths.
+   * @returns Page data suitable for Astro's `parseData` loader helper.
+   */
+  async getPageData(transformCoverImage = false, rootAlias = 'src'): Promise<ParseDataOptions<NotionPageData>> {
+    const { page } = this;
+    let cover = page.cover;
+    let icon = page.icon;
+    let properties = page.properties;
+
+    if (cover && transformCoverImage && cover.type === 'file') {
+      const fetchedCover = await this.#fetchAsset(cover);
+      const coverPath = fileToUrl(fetchedCover);
+      if (coverPath && fetchedCover.type === 'file') {
+        const transformedUrl = `${rootAlias}/${transformImagePathForCover(coverPath)}`;
+        cover = {
+          ...cover,
+          file: {
+            ...cover.file,
+            url: transformedUrl,
+          },
+        };
+      }
+    }
+
+    if (transformCoverImage) {
+      icon = icon ? await this.#fetchAsset(icon) : icon;
+      properties = await this.#getPagePropertiesWithFetchedAssets();
+    }
+
+    return {
+      id: page.id,
+      data: {
+        icon,
+        cover,
+        archived: page.archived,
+        in_trash: page.in_trash,
+        url: page.url,
+        public_url: page.public_url,
+        properties,
+      },
+    };
+  }
+
+  async #getPagePropertiesWithFetchedAssets(): Promise<PageObjectResponse['properties']> {
+    const properties = { ...this.page.properties };
+
+    for (const [propertyName, property] of Object.entries(properties)) {
+      if (property.type !== 'files') {
+        continue;
+      }
+
+      properties[propertyName] = {
+        ...property,
+        files: await Promise.all(property.files.map(async (file) => this.#fetchAsset(file))),
+      };
+    }
+
+    return properties;
+  }
+
+  /**
    * Return rendered HTML for the page.
+   *
    * @param process Processor function to transform Notion blocks into HTML.
    * This is created once for all pages then shared.
+   * @returns Rendered HTML and metadata, or undefined if rendering failed.
    */
-  async render(
-    process: ReturnType<typeof buildProcessor>
-  ): Promise<{ data?: ParseDataOptions<NotionPageData>; rendered?: RenderedNotionPage }> {
-    try {
-      this.#logger.debug(`Generating page metadata`);
-      const data = await this.#getPageData();
-      this.#logger.debug(`Generated page metadata ${dim(`${this.#assetPaths.length} assets found`)}`);
+  async render(process: ReturnType<typeof buildProcessor>): Promise<RenderedNotionEntry | undefined> {
+    this.#logger.debug('Rendering page');
 
-      this.#logger.debug(`Fetching page content`);
-      const blocks = await awaitAll(this.fetchBlocks(this.client, this.page.id));
-      this.#logger.debug(`Fetched page content ${dim(`${blocks.length} blocks found`)}`);
+    try {
+      const blocks = await awaitAll(listBlocks(this.client, this.page.id, this.#fetchAsset));
 
       if (this.#assetAnalytics.download > 0 || this.#assetAnalytics.cached > 0) {
         this.#logger.info(
@@ -148,153 +310,60 @@ export class NotionPageRenderer {
         );
       }
 
-      this.#logger.debug(`Rendering page`);
       const { vFile, headings } = await process(blocks, this.#assetPaths);
       this.#logger.debug('Rendered page');
 
       return {
-        data,
-        rendered: {
-          html: vFile.toString(),
-          metadata: {
-            headings,
-            imagePaths: this.#assetPaths,
-            blocks,
-          },
+        html: vFile.toString(),
+        metadata: {
+          headings,
+          imagePaths: this.#assetPaths,
         },
       };
     } catch (error) {
-      this.#logger.error(`Failed to render: ${JSON.stringify(error)}`);
-      console.error(error);
-      return {};
+      this.#logger.error(`Failed to render: ${getErrorMessage(error)}`);
+      return undefined;
     }
   }
 
-  /**
-   * Create data for Astro Content Store, including page metadata and properties.
-   *
-   * Properties with Notion-hosted assets are transformed to local paths.
-   */
-  async #getPageData(): Promise<ParseDataOptions<NotionPageData>> {
-    const { page } = this;
-
-    // transform cover image file
-    let cover = await this.#fetchAsset(page.cover);
-
-    // transform icon image file
-    let icon = await this.#fetchAsset(page.icon);
-
-    // transform file properties
-    let properties = page.properties;
-    for (const [_, prop] of Object.entries(properties)) {
-      if (prop.type === 'files') {
-        // @ts-ignore files will be AssetObject[]
-        prop.files = await Promise.all(prop.files.map(async (f) => await this.#fetchAsset(f)));
-      }
-    }
-
-    return {
-      id: page.id,
-      data: { ...page, icon, cover, properties },
-    };
-  }
-
-  /**
-   * Helper function to download Notion-hosted files to local storage.
-   * Additionally saves the path in `this.#imagePaths`.
-   * @param fileObject Notion file object representing an image.
-   * @param resolvePath Whether to resolve the path to a local file. If true, the path will start with `src/${assetPath}`.
-   * @returns Local path to the image, or undefined if the image could not be fetched.
-   */
-  async #fetchAsset<T extends AssetObject>(fileObject: T, resolvePath: boolean = true): Promise<T> {
+  #fetchAsset = async <T extends AssetObject>(assetObject: T): Promise<T> => {
     try {
-      if (fileObject === null || fileObject.type !== 'file') {
-        // TODO: support downloading external files
-        return fileObject; // return the original object if not a Notion-hosted file
+      if (assetObject.type !== 'file') {
+        return assetObject;
       }
 
-      fse.ensureDirSync(this.assetPath);
-
-      const filePath = await downloadFile(fileObject.file.url, this.assetPath, {
-        log: (msg) => this.#logger.debug(msg),
-        tag: (type) => this.#assetAnalytics[type]++,
+      fse.ensureDirSync(this.imageSavePath);
+      const assetUrl = await saveImageFromAWS(assetObject.file.url, this.imageSavePath, {
+        log: (message) => {
+          this.#logger.debug(message);
+        },
+        tag: (type) => {
+          this.#assetAnalytics[type]++;
+        },
       });
 
-      this.#assetPaths.push(filePath);
+      this.#assetPaths.push(assetUrl);
       return {
-        ...fileObject,
+        ...assetObject,
         file: {
-          ...fileObject.file,
-          url: resolvePath ? resolveAssetPath(filePath) : filePath,
+          ...assetObject.file,
+          url: assetUrl,
         },
       };
     } catch (error) {
-      this.#logger.error(`Failed to fetch image: ${JSON.stringify(error)}`);
-      console.error(error);
+      this.#logger.error(`Failed to fetch asset: ${getErrorMessage(error)}`);
 
-      // Fall back to using the remote URL directly
-      return fileObject;
+      return assetObject;
     }
-  }
-
-  /**
-   * Return a generator that yields all blocks in a Notion page, recursively.
-   * @param blockId ID of block to get children for.
-   */
-  async *fetchBlocks(client: Client, blockId: string) {
-    this.#logger.debug(`Fetching block ${blockId}`);
-    for await (const block of iteratePaginatedAPI(client.blocks.children.list, {
-      block_id: blockId,
-    })) {
-      if (!isFullBlock(block)) continue;
-
-      if (block.has_children) {
-        this.#logger.debug(`Fetching children of block ${block.id}`);
-        const children = await awaitAll(this.fetchBlocks(client, block.id));
-
-        // @ts-ignore -- children doesn't exist in the type definition
-        block[block.type].children = children;
-      }
-
-      // Handle blocks with potential Notion-hosted assets
-      switch (block.type) {
-        // Duplicated due to TS type narrowing. This can be written as:
-        // { ...block, [block.type]: await this.#fetchAsset(block[block.type]) },
-        // but unfortunately TS doesn't understand Notion's block type system.
-        case 'file':
-          yield { ...block, file: await this.#fetchAsset(block.file) };
-          break;
-        case 'image':
-          yield { ...block, image: await this.#fetchAsset(block.image, false) };
-          break;
-        case 'video':
-          yield { ...block, video: await this.#fetchAsset(block.video) };
-          break;
-        case 'audio':
-          yield { ...block, audio: await this.#fetchAsset(block.audio) };
-          break;
-        case 'callout':
-          yield {
-            ...block,
-            [block.type]: {
-              ...block[block.type],
-              icon: await this.#fetchAsset(block[block.type].icon, false),
-            },
-          };
-          break;
-        default:
-          yield block;
-      }
-    }
-  }
+  };
 }
 
-// function getErrorMessage(error: unknown): string {
-//   if (error instanceof Error) {
-//     return error.message;
-//   } else if (typeof error === 'string') {
-//     return error;
-//   } else {
-//     return 'Unknown error';
-//   }
-// }
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  return 'Unknown error';
+}
