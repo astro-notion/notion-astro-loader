@@ -570,6 +570,9 @@ packages:
     resolution: {integrity: sha512-MS0DFSfHPLZ0wi+e9mOP16gCCYbWAkaiMuu/rVK9KxDlKac4oAgHReOfTglcd77g/nlg78snp+KB7fNWP75bEw==}
     engines: {node: '>=18'}
 
+  '@ntcho/notion-rehype@1.2.0':
+    resolution: {integrity: sha512-KcTZpMmUpqz3PIf2YnKYGmFceJaXTRz5BWMnkkibczmGe1cXDoW2tL6b81JkYeRyIvXopeGXWGNQrgK1smjXQA==}
+
   '@oslojs/encoding@1.1.0':
     resolution: {integrity: sha512-70wQhgYmndg4GCPxPPxPGevRKqTIJ2Nh4OkiMWmDAVYsTQ+Ta7Sq+rPevXyXGdzr30/qZBnyOalCszoMxlyldQ==}
 
@@ -1491,6 +1494,9 @@ packages:
 
   oniguruma-parser@0.12.2:
     resolution: {integrity: sha512-6HVa5oIrgMC6aA6WF6XyyqbhRPJrKR02L20+2+zpDtO5QAzGHAUGw5TKQvwi5vctNnRHkJYmjAhRVQF2EKdTQw==}
+
+  oniguruma-to-es@2.3.0:
+    resolution: {integrity: sha512-bwALDxriqfKGfUufKGGepCzu9x7nJQuoRoAFp4AnwehhC2crqrDIAP/uN2qdlsAvSMpeRC3+Yzhqc7hLmle5+g==}
 
   oniguruma-to-es@4.3.6:
     resolution: {integrity: sha512-csuQ9x3Yr0cEIs/Zgx/OEt9iBw9vqIunAPQkx19R/fiMq2oGVTgcMqO/V3Ybqefr1TBvosI6jU539ksaBULJyA==}
@@ -2434,6 +2440,8 @@ snapshots:
   '@jsdevtools/rehype-toc@3.0.2': {}
 
   '@notionhq/client@5.20.0': {}
+
+  '@ntcho/notion-rehype@1.2.0': {}
 
   '@oslojs/encoding@1.1.0': {}
 
@@ -3625,6 +3633,8 @@ snapshots:
   ohash@2.0.11: {}
 
   oniguruma-parser@0.12.2: {}
+
+  oniguruma-to-es@2.3.0: {}
 
   oniguruma-to-es@4.3.6:
     dependencies:

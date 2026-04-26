@@ -155,24 +155,13 @@ export function notionLoader({
         pageCount++;
 
         const log_pg = log_db.fork(`${log_db.label}/${page.id.slice(0, 6)}`);
-
-        // Create metadata for logging
-        const titleProp = Object.entries(page.properties).find(([_, property]) => property.type === 'title');
-        const pageTitle = transformedPropertySchema.title.safeParse(titleProp ? titleProp[1] : {});
-        const pageMetadata = [
-          `${pageTitle.success ? '"' + pageTitle.data + '"' : 'Untitled'}`,
-          `(last edited ${page.last_edited_time.slice(0, 10)})`,
-        ].join(' ');
-
+        const pageMetadata = getPageMetadata(page);
         const isCached = existingPageIds.delete(page.id);
         const existingPage = store.get(page.id);
 
-        // If the page has been updated, re-render it
-        if (existingPage?.digest !== page.last_edited_time) {
+        if (existingPage?.digest !== page.last_edited_time || process.env.FORCE_RERENDER) {
           const realSavePath = path.resolve(process.cwd(), 'src', imageSavePath);
-
           const renderer = new NotionPageRenderer(notionClient, page, realSavePath, log_pg);
-
           const pageData = await renderer.getPageData(experimentalCacheImageInData, experimentalRootSourceAlias);
           const data = await parseData(pageData);
 
@@ -182,7 +171,7 @@ export function notionLoader({
               digest: page.last_edited_time,
               data,
               rendered,
-              filePath: `${VIRTUAL_CONTENT_ROOT}/${page.id}.md`, // 不重要，有就行
+              filePath: `${VIRTUAL_CONTENT_ROOT}/${page.id}.md`,
               assetImports: rendered?.metadata.imagePaths,
             });
           });
@@ -195,7 +184,6 @@ export function notionLoader({
         }
       }
 
-      // Remove any pages that have been deleted
       for (const deletedPageId of existingPageIds) {
         const log_pg = log_db.fork(`${log_db.label}/${deletedPageId.slice(0, 6)}`);
 
@@ -209,7 +197,6 @@ export function notionLoader({
         return;
       }
 
-      // Wait for rendering to complete
       log_db.info(`Rendering ${renderPromises.length} updated pages`);
       await Promise.all(renderPromises);
       log_db.info(`Rendered ${renderPromises.length} pages`);
@@ -218,10 +205,25 @@ export function notionLoader({
 }
 
 /**
+ * Get the page metadata in a formatted string.
+ *
+ * @param page Notion page response to summarize.
+ * @returns The formatted page title and last edited date.
+ */
+function getPageMetadata(page: Parameters<typeof isFullPage>[0] & { properties: Record<string, unknown>; last_edited_time: string }): string {
+  const titleProp = Object.entries(page.properties).find(([_, property]) => {
+    return typeof property === 'object' && property !== null && 'type' in property && property.type === 'title';
+  });
+  const pageTitle = transformedPropertySchema.title.safeParse(titleProp ? titleProp[1] : {});
+  return [
+    `${pageTitle.success ? '"' + pageTitle.data + '"' : 'Untitled'}`,
+    `(last edited ${page.last_edited_time.slice(0, 10)})`,
+  ].join(' ');
+}
+
+/**
  * Generate TypeScript types for the properties of a Notion data source.
- * The generated types are based on the property configurations of the data source, 
- * and reference the raw property schemas for each property type.
- * 
+ *
  * @param properties The properties of the Notion data source returned by the Notion API.
  * @returns A string containing the TypeScript type definitions for the properties of the Notion data source.
  */

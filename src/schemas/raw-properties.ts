@@ -50,7 +50,7 @@ const formulaPropertyResponse = z.discriminatedUnion('type', [
     boolean: z.boolean().nullable(),
   }),
 ]);
-const baseRickTextResponse = z.object({
+const baseRichTextResponse = z.object({
   annotations: z
     .object({
       bold: z.boolean(),
@@ -65,7 +65,7 @@ const baseRickTextResponse = z.object({
   href: z.string().nullable(),
 });
 const richTextItemResponse = z.discriminatedUnion('type', [
-  baseRickTextResponse.extend({
+  baseRichTextResponse.extend({
     type: z.literal('text'),
     text: z.object({
       content: z.string(),
@@ -76,7 +76,7 @@ const richTextItemResponse = z.discriminatedUnion('type', [
         .nullable(),
     }),
   }),
-  baseRickTextResponse.extend({
+  baseRichTextResponse.extend({
     type: z.literal('mention'),
     mention: z
       .object({
@@ -84,7 +84,7 @@ const richTextItemResponse = z.discriminatedUnion('type', [
       })
       .passthrough(),
   }),
-  baseRickTextResponse.extend({
+  baseRichTextResponse.extend({
     type: z.literal('equation'),
     equation: z.object({
       expression: z.string(),

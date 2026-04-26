@@ -8,7 +8,7 @@ import rehypeKatex from 'rehype-katex';
 import rehypeSlug from 'rehype-slug';
 import rehypeStringify from 'rehype-stringify';
 import { unified, type Plugin } from 'unified';
-import { type VFile } from 'vfile';
+import type { VFile } from 'vfile';
 
 import type { HtmlElementNode, ListNode, TextNode } from '@jsdevtools/rehype-toc';
 import { toc as rehypeToc } from '@jsdevtools/rehype-toc';
@@ -18,18 +18,17 @@ import { dim } from 'kleur/colors';
 import { fileToUrl } from './format.js';
 import { saveImageFromAWS, transformImagePathForCover } from './image.js';
 import { rehypeImages } from './rehype/rehype-images.js';
-import type { FileObject, NotionPageData, PageObjectResponse } from './types.js';
-
-const baseProcessor = unified()
-  .use(notionRehype, {}) // Parse Notion blocks to rehype AST
-  .use(rehypeSlug)
-  .use(
-    // @ts-ignore
-    rehypeKatex
-  ) // Then you can use any rehype plugins to enrich the AST
-  .use(rehypeStringify); // Turn AST to HTML string
+import type { AssetObject, FileObject, NotionPageData, PageObjectResponse } from './types.js';
 
 export type RehypePlugin = Plugin<any[], any>;
+
+const baseProcessor = unified()
+  // @ts-ignore
+  .use(notionRehype, {}) // Parse Notion blocks to rehype AST
+  .use(rehypeSlug)
+  // @ts-ignore
+  .use(rehypeKatex) // Then you can use any rehype plugins to enrich the AST
+  .use(rehypeStringify); // Turn AST to HTML string
 
 export function buildProcessor(rehypePlugins: Promise<ReadonlyArray<readonly [RehypePlugin, any]>>) {
   let headings: MarkdownHeading[] = [];
@@ -54,7 +53,6 @@ export function buildProcessor(rehypePlugins: Promise<ReadonlyArray<readonly [Re
     return { vFile, headings };
   };
 }
-// #endregion
 
 async function awaitAll<T>(iterable: AsyncIterable<T>) {
   const result: T[] = [];
@@ -66,10 +64,13 @@ async function awaitAll<T>(iterable: AsyncIterable<T>) {
 
 /**
  * Return a generator that yields all blocks in a Notion page, recursively.
+ *
+ * @param client Notion API client.
  * @param blockId ID of block to get children for.
- * @param fetchImage Function that fetches an image and returns a local path.
+ * @param fetchAsset Function that fetches an asset and returns an updated Notion asset object.
+ * @returns Full Notion blocks with asset URLs transformed for rendering.
  */
-async function* listBlocks(client: Client, blockId: string, fetchImage: (file: FileObject) => Promise<string>) {
+async function* listBlocks(client: Client, blockId: string, fetchAsset: <T extends AssetObject>(asset: T) => Promise<T>) {
   for await (const block of iteratePaginatedAPI(client.blocks.children.list, {
     block_id: blockId,
   })) {
@@ -78,28 +79,82 @@ async function* listBlocks(client: Client, blockId: string, fetchImage: (file: F
     }
 
     if (block.has_children) {
-      const children = await awaitAll(listBlocks(client, block.id, fetchImage));
-      // @ts-ignore -- TODO: Make TypeScript happy here
+      const children = await awaitAll(listBlocks(client, block.id, fetchAsset));
+
+      // @ts-ignore -- children doesn't exist in the type definition.
       block[block.type].children = children;
     }
 
-    // Specialized handling for image blocks
-    if (block.type === 'image') {
-      // Fetch remote image and store it locally
-      const url = await fetchImage(block.image);
-      // notion-rehype-k incorrectly expects "file" to be a string instead of an object
-      yield {
-        ...block,
-        image: {
-          type: block.image.type,
-          [block.image.type]: url,
-          caption: block.image.caption,
-        },
-      };
-    } else {
-      yield block;
+    switch (block.type) {
+      case 'file':
+        yield { ...block, file: await getRenderableAsset(block.file, fetchAsset) };
+        break;
+      case 'image':
+        yield { ...block, image: await getRenderableAsset(block.image, fetchAsset) };
+        break;
+      case 'video':
+        yield { ...block, video: await getRenderableAsset(block.video, fetchAsset) };
+        break;
+      case 'audio':
+        yield { ...block, audio: await getRenderableAsset(block.audio, fetchAsset) };
+        break;
+      case 'callout':
+        yield {
+          ...block,
+          callout: {
+            ...block.callout,
+            icon: block.callout.icon ? await getRenderableIcon(block.callout.icon, fetchAsset) : block.callout.icon,
+          },
+        };
+        break;
+      default:
+        yield block;
     }
   }
+}
+
+async function getRenderableAsset<T extends FileObject>(
+  asset: T,
+  fetchAsset: <Asset extends AssetObject>(asset: Asset) => Promise<Asset>
+) {
+  const fetchedAsset = await fetchAsset(asset);
+  const url = fileToUrl(fetchedAsset);
+
+  if (!url) {
+    return asset;
+  }
+
+  // notion-rehype-k expects the selected file field as a URL string instead of a Notion file object.
+  return {
+    ...asset,
+    type: fetchedAsset.type,
+    [fetchedAsset.type]: url,
+  };
+}
+
+async function getRenderableIcon<T extends AssetObject>(
+  icon: T,
+  fetchAsset: <Asset extends AssetObject>(asset: Asset) => Promise<Asset>
+) {
+  if (icon.type === 'emoji') {
+    return icon;
+  }
+
+  const fetchedIcon = await fetchAsset(icon);
+  const url = fileToUrl(fetchedIcon);
+
+  if (!url) {
+    return { type: 'emoji' as const, emoji: '' };
+  }
+
+  if (fetchedIcon.type === 'custom_emoji') {
+    return { type: 'external' as const, external: url };
+  }
+
+  return {
+    type: fetchedIcon.type,
+    [fetchedIcon.type]: url,
+  };
 }
 
 function extractTocHeadings(toc: HtmlElementNode): MarkdownHeading[] {
@@ -128,18 +183,27 @@ function extractTocHeadings(toc: HtmlElementNode): MarkdownHeading[] {
 
   return listElementToTree(toc.children![0] as ListNode, 0);
 }
+// #endregion
 
+/**
+ * Represents a rendered Notion page that has been processed and prepared for rendering.
+ *
+ * Extends `RenderedContent` object: https://docs.astro.build/en/reference/content-loader-reference/#rendered
+ */
 export interface RenderedNotionEntry {
+  /** Rendered HTML string. If present then `render(entry)` will return a component that renders this HTML. */
   html: string;
   metadata: {
+    /** Any images that are present in this entry. Relative to the DataEntry filePath. */
     imagePaths: string[];
+    /** Any headings that are present in this file. Returned as `headings` from `render()` */
     headings: MarkdownHeading[];
   };
 }
 
 export class NotionPageRenderer {
-  #imagePaths: string[] = [];
-  #imageAnalytics: Record<'download' | 'cached', number> = {
+  #assetPaths: string[] = [];
+  #assetAnalytics = {
     download: 0,
     cached: 0,
   };
@@ -148,7 +212,8 @@ export class NotionPageRenderer {
   /**
    * @param client Notion API client.
    * @param page Notion page object including page ID and properties. Does not include blocks.
-   * @param parentLogger Logger to use for logging messages.
+   * @param imageSavePath Directory where Notion-hosted assets are saved.
+   * @param logger Logger to use for rendering messages.
    */
   constructor(
     private readonly client: Client,
@@ -161,64 +226,98 @@ export class NotionPageRenderer {
 
   /**
    * Return page properties for Astro to use.
+   *
+   * @param transformCoverImage Whether Notion-hosted cover images should be saved and rewritten.
+   * @param rootAlias Alias prepended to transformed cover image paths.
+   * @returns Page data suitable for Astro's `parseData` loader helper.
    */
   async getPageData(transformCoverImage = false, rootAlias = 'src'): Promise<ParseDataOptions<NotionPageData>> {
     const { page } = this;
     let cover = page.cover;
-    // transform cover image file
+    let icon = page.icon;
+    let properties = page.properties;
+
     if (cover && transformCoverImage && cover.type === 'file') {
-      const transformedUrl = `${rootAlias}/${transformImagePathForCover(await this.#fetchImage(cover))}`;
-      cover = {
-        ...cover,
-        file: {
-          ...cover.file,
-          url: transformedUrl,
-        },
-      };
+      const fetchedCover = await this.#fetchAsset(cover);
+      const coverPath = fileToUrl(fetchedCover);
+      if (coverPath && fetchedCover.type === 'file') {
+        const transformedUrl = `${rootAlias}/${transformImagePathForCover(coverPath)}`;
+        cover = {
+          ...cover,
+          file: {
+            ...cover.file,
+            url: transformedUrl,
+          },
+        };
+      }
     }
+
+    if (transformCoverImage) {
+      icon = icon ? await this.#fetchAsset(icon) : icon;
+      properties = await this.#getPagePropertiesWithFetchedAssets();
+    }
+
     return {
       id: page.id,
       data: {
-        icon: page.icon,
+        icon,
         cover,
         archived: page.archived,
         in_trash: page.in_trash,
         url: page.url,
         public_url: page.public_url,
-        properties: page.properties,
+        properties,
       },
     };
   }
 
+  async #getPagePropertiesWithFetchedAssets(): Promise<PageObjectResponse['properties']> {
+    const properties = { ...this.page.properties };
+
+    for (const [propertyName, property] of Object.entries(properties)) {
+      if (property.type !== 'files') {
+        continue;
+      }
+
+      properties[propertyName] = {
+        ...property,
+        files: await Promise.all(property.files.map(async (file) => this.#fetchAsset(file))),
+      };
+    }
+
+    return properties;
+  }
+
   /**
    * Return rendered HTML for the page.
+   *
    * @param process Processor function to transform Notion blocks into HTML.
    * This is created once for all pages then shared.
+   * @returns Rendered HTML and metadata, or undefined if rendering failed.
    */
   async render(process: ReturnType<typeof buildProcessor>): Promise<RenderedNotionEntry | undefined> {
     this.#logger.debug('Rendering page');
 
     try {
-      const blocks = await awaitAll(listBlocks(this.client, this.page.id, this.#fetchImage));
+      const blocks = await awaitAll(listBlocks(this.client, this.page.id, this.#fetchAsset));
 
-      if (this.#imageAnalytics.download > 0 || this.#imageAnalytics.cached > 0) {
+      if (this.#assetAnalytics.download > 0 || this.#assetAnalytics.cached > 0) {
         this.#logger.info(
           [
-            `Found ${this.#imageAnalytics.download} images to download`,
-            this.#imageAnalytics.cached > 0 && dim(`${this.#imageAnalytics.cached} already cached`),
+            `Found ${this.#assetAnalytics.download} assets to download`,
+            this.#assetAnalytics.cached > 0 ? dim(`${this.#assetAnalytics.cached} already cached`) : '',
           ].join(' ')
         );
       }
 
-      const { vFile, headings } = await process(blocks, this.#imagePaths);
-
+      const { vFile, headings } = await process(blocks, this.#assetPaths);
       this.#logger.debug('Rendered page');
 
       return {
         html: vFile.toString(),
         metadata: {
           headings,
-          imagePaths: this.#imagePaths,
+          imagePaths: this.#assetPaths,
         },
       };
     } catch (error) {
@@ -227,36 +326,34 @@ export class NotionPageRenderer {
     }
   }
 
-  /**
-   * Helper function to convert remote Notion images into local images in Astro.
-   * Additionally saves the path in `this.#imagePaths`.
-   * @param imageFileObject Notion file object representing an image.
-   * @returns Local path to the image, or undefined if the image could not be fetched.
-   */
-  #fetchImage: (imageFileObject: FileObject) => Promise<string> = async (imageFileObject) => {
+  #fetchAsset = async <T extends AssetObject>(assetObject: T): Promise<T> => {
     try {
-      // only file type will be processed
-      if (imageFileObject.type === 'external') {
-        return imageFileObject.external.url;
+      if (assetObject.type !== 'file') {
+        return assetObject;
       }
 
       fse.ensureDirSync(this.imageSavePath);
-
-      // 文件需要下载到本地的指定目录中
-      const imageUrl = await saveImageFromAWS(imageFileObject.file.url, this.imageSavePath, {
+      const assetUrl = await saveImageFromAWS(assetObject.file.url, this.imageSavePath, {
         log: (message) => {
           this.#logger.debug(message);
         },
         tag: (type) => {
-          this.#imageAnalytics[type]++;
+          this.#assetAnalytics[type]++;
         },
       });
-      this.#imagePaths.push(imageUrl);
-      return imageUrl;
+
+      this.#assetPaths.push(assetUrl);
+      return {
+        ...assetObject,
+        file: {
+          ...assetObject.file,
+          url: assetUrl,
+        },
+      };
     } catch (error) {
-      this.#logger.error(`Failed to fetch image: ${getErrorMessage(error)}`);
-      // Fall back to using the remote URL directly.
-      return fileToUrl(imageFileObject);
+      this.#logger.error(`Failed to fetch asset: ${getErrorMessage(error)}`);
+
+      return assetObject;
     }
   };
 }
@@ -264,9 +361,9 @@ export class NotionPageRenderer {
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
-  } else if (typeof error === 'string') {
-    return error;
-  } else {
-    return 'Unknown error';
   }
+  if (typeof error === 'string') {
+    return error;
+  }
+  return 'Unknown error';
 }
