@@ -22,9 +22,8 @@ export const checkbox: TransformedSchema<typeof propertyType.checkbox, boolean> 
 export const select: TransformedSchema<typeof propertyType.select, string | null> = propertyType.select.transform(
   (property) => property.select?.name ?? null
 );
-export const multi_select: TransformedSchema<typeof propertyType.multi_select, string[]> = propertyType.multi_select.transform(
-  (property) => property.multi_select.map((option) => option.name) ?? []
-);
+export const multi_select: TransformedSchema<typeof propertyType.multi_select, string[]> =
+  propertyType.multi_select.transform((property) => property.multi_select.map((option) => option.name) ?? []);
 export const status: TransformedSchema<typeof propertyType.status, string | null> = propertyType.status.transform(
   (property) => property.status?.name ?? null
 );

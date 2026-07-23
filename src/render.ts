@@ -70,7 +70,11 @@ async function awaitAll<T>(iterable: AsyncIterable<T>) {
  * @param fetchAsset Function that fetches an asset and returns an updated Notion asset object.
  * @returns Full Notion blocks with asset URLs transformed for rendering.
  */
-async function* listBlocks(client: Client, blockId: string, fetchAsset: <T extends AssetObject>(asset: T) => Promise<T>) {
+async function* listBlocks(
+  client: Client,
+  blockId: string,
+  fetchAsset: <T extends AssetObject>(asset: T) => Promise<T>
+) {
   for await (const block of iteratePaginatedAPI(client.blocks.children.list, {
     block_id: blockId,
   })) {

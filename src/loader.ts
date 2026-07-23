@@ -14,7 +14,10 @@ import type { ClientOptions, DataSourcePropertyConfigResponse, QueryDataSourcePa
 
 export interface NotionLoaderOptions
   extends Pick<ClientOptions, 'auth' | 'timeoutMs' | 'baseUrl' | 'notionVersion' | 'fetch' | 'agent'>,
-    Pick<QueryDataSourceParameters, 'data_source_id' | 'filter_properties' | 'sorts' | 'filter' | 'in_trash' | 'archived'> {
+    Pick<
+      QueryDataSourceParameters,
+      'data_source_id' | 'filter_properties' | 'sorts' | 'filter' | 'in_trash' | 'archived'
+    > {
   /**
    * Pass rehype plugins to customize how the Notion output HTML is processed.
    * You can import and apply the plugin function (recommended), or pass the plugin name as a string.
@@ -210,7 +213,9 @@ export function notionLoader({
  * @param page Notion page response to summarize.
  * @returns The formatted page title and last edited date.
  */
-function getPageMetadata(page: Parameters<typeof isFullPage>[0] & { properties: Record<string, unknown>; last_edited_time: string }): string {
+function getPageMetadata(
+  page: Parameters<typeof isFullPage>[0] & { properties: Record<string, unknown>; last_edited_time: string }
+): string {
   const titleProp = Object.entries(page.properties).find(([_, property]) => {
     return typeof property === 'object' && property !== null && 'type' in property && property.type === 'title';
   });
