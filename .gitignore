@@ -25,3 +25,6 @@ pnpm-debug.log*
 .cache
 
 *.tsbuildinfo
+
+# workspace specific files
+opencode.json*
