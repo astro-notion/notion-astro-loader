@@ -1,0 +1,116 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Validate and publish
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      prerelease: ${{ steps.release.outputs.prerelease }}
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
+
+      - name: Validate release tag
+        id: release
+        shell: bash
+        run: |
+          package_version=$(node --input-type=module -e "import packageJson from './package.json' with { type: 'json' }; console.log(packageJson.version)")
+          expected_tag="v${package_version}"
+          semver_pattern='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?(\+([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*))?$'
+
+          if [[ ! "$package_version" =~ $semver_pattern ]]; then
+            echo "package.json version is not valid SemVer: ${package_version}" >&2
+            exit 1
+          fi
+
+          if [[ "$GITHUB_REF_NAME" != "$expected_tag" ]]; then
+            echo "Release tag ${GITHUB_REF_NAME} does not match ${expected_tag}" >&2
+            exit 1
+          fi
+
+          git fetch --no-tags origin main
+          tag_commit=$(git rev-parse "${GITHUB_REF_NAME}^{commit}")
+          if ! git merge-base --is-ancestor "$tag_commit" origin/main; then
+            echo "Release tag ${GITHUB_REF_NAME} is not contained in origin/main" >&2
+            exit 1
+          fi
+
+          version_without_build=${package_version%%+*}
+          if [[ "$version_without_build" == *-* ]]; then
+            prerelease=true
+            dist_tag=next
+          else
+            prerelease=false
+            dist_tag=latest
+          fi
+
+          echo "prerelease=${prerelease}" >> "$GITHUB_OUTPUT"
+          echo "dist_tag=${dist_tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Install trusted-publishing npm version
+        run: npm install --global npm@11.15.0
+
+      - name: Validate package artifact
+        run: npm publish --dry-run --ignore-scripts --access public --tag "${{ steps.release.outputs.dist_tag }}"
+
+      - name: Publish to npm
+        run: npm publish --access public --provenance --tag "${{ steps.release.outputs.dist_tag }}"
+
+  github-release:
+    name: Create GitHub Release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create generated release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          release_options=(--generate-notes)
+          if [[ "${{ needs.publish.outputs.prerelease }}" == "true" ]]; then
+            release_options+=(--prerelease)
+          fi
+
+          gh release create "$GITHUB_REF_NAME" "${release_options[@]}" --repo "$GITHUB_REPOSITORY" --verify-tag

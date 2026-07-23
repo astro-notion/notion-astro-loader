@@ -10,6 +10,8 @@
 
 This release line targets `astro@>=6 <7` and Node.js `>=22.12.0`.
 
+Contributions are welcome. See [Contributing and Releasing](docs/CONTRIBUTING.md) for contributor expectations and the canonical maintainer release procedure.
+
 ## Installation
 
 Requirements:
