@@ -31,7 +31,7 @@
 ## 5. Configure And Roll Out Trusted Publishing
 
 - [x] 5.1 Configure npm trusted publishing for `@astro-notion/loader` using the exact repository owner, repository name, and release workflow filename.
-- [ ] 5.2 Land the workflow and documentation on `main`, enable the updated CI and new tag-triggered release workflows in GitHub, confirm CI succeeds, and confirm the branch push does not start package publication; do not re-enable the removed publication workflows.
+- [x] 5.2 Land the workflow and documentation on `main`, enable the updated CI and new tag-triggered release workflows in GitHub, confirm CI succeeds, and confirm the branch push does not start package publication; do not re-enable the removed publication workflows.
 - [ ] 5.3 Create annotated tag `v2.0.0-beta.1` on the matching `main` commit and atomically push `main` and the tag after maintainer approval.
 - [ ] 5.4 Verify npm keeps `latest` at `1.1.2`, sets `next` to `2.0.0-beta.1`, displays provenance, and GitHub creates a generated prerelease.
 - [ ] 5.5 Remove any obsolete npm publication secret after the trusted-publishing release succeeds.
