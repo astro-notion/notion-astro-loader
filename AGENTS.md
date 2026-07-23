@@ -1,222 +1,101 @@
+# Astro Content Layer Loader for Notion
 
-# AGENTS.md - Guide for AI Coding Assistants
+A TypeScript package that loads Notion data sources into Astro Content Layer collections and renders pages with Astro-compatible asset metadata.
 
-This file contains essential information for AI coding agents working in this Notion Astro loader repository.
+## Stack
 
-## Project Overview
+- TypeScript with strict Astro configuration and NodeNext ESM.
+- Astro Content Layer API, Astro assets, and Astro's Zod integration.
+- Notion SDK `dataSources` API.
+- Unified and rehype for rendering Notion pages.
+- Vitest for tests and Prettier for formatting.
+- Node.js 22.12.0 or newer and pnpm 10.
 
-This is a TypeScript npm package that provides an Astro Content Layer loader for Notion data sources. It's a fork of the original Notion loader with fixes for image asset handling.
+## Key Commands
 
-- **Main technologies**: TypeScript, Astro Content Layer API, Notion SDK, Unified/Rehype, Zod
-- **Package manager**: pnpm (required - see packageManager field in package.json)
-- **Module system**: ESM (Node.js 22.12.0+)
+- `pnpm build`: compile the package with TypeScript.
+- `pnpm build:watch`: compile in watch mode.
+- `pnpm clean`: remove generated build output.
+- `pnpm exec prettier --check "src/**/*.{ts,js,json}"`: check source formatting.
+- `pnpm typecheck`: check `src/` and the compile-only Astro collection fixture in `tests/typecheck/`.
+- `pnpm test`: run the Vitest suite.
+- `pnpm exec vitest run tests/astro-v6-support.test.ts`: run the compatibility suite alone.
+- Match CI locally in this order: formatting, typecheck, tests, then build.
 
-## Essential Commands
+## File Structure
 
-### Build Commands
-
-```bash
-# Build the project
-pnpm run build
-
-# Watch mode for development
-pnpm run build:watch
-
-# Clean build artifacts
-pnpm run clean
-
-# Build before publishing (runs automatically)
-pnpm run prepublishOnly
-```
-
-### Testing
-
-```bash
-# Run the verification suite
-pnpm run test
-```
-
-Note: Vitest is configured for targeted compatibility coverage. Add new tests there when expanding coverage.
-
-### Code Quality
-
-No dedicated lint/format commands. Use:
-
-```bash
-# Format with Prettier (global or npx)
-npx prettier --write . --config .prettierrc.cjs
-
-# Type checking
-npx tsc --noEmit
-```
-
-## Code Style Guidelines
-
-### TypeScript Configuration
-
-- Extends Astro's strictest config (`astro/tsconfigs/strictest`)
-- Composite project with declaration maps enabled
-- NodeNext module resolution
-- Strict type checking with `exactOptionalPropertyTypes: false`
-
-### Import Style
-
-```typescript
-// 1. Type imports first
-import type { Loader } from 'astro/loaders';
-import type { ClientOptions } from './types.js';
-
-// 2. Regular imports (external packages)
-import { Client, isFullPage } from '@notionhq/client';
-import { dim } from 'kleur/colors';
-import * as path from 'node:path';
-
-// 3. Local imports with explicit .js extensions (ESM requirement)
-import { buildProcessor } from './render.js';
-import { notionPageSchema } from './schemas/page.js';
-```
-
-### Naming Conventions
-
-- **Files**: kebab-case (`datasource-properties.ts`, `image-save-path.ts`)
-- **Variables/Functions**: camelCase (`notionLoader`, `buildProcessor`)
-- **Types/Interfaces**: PascalCase (`NotionLoaderOptions`, `RenderedNotionEntry`)
-- **Constants**: UPPER_SNAKE_CASE (`DEFAULT_IMAGE_SAVE_PATH`, `VIRTUAL_CONTENT_ROOT`)
-- **Private fields**: `#prefix` (`#imagePaths`, `#logger`)
-
-### Formatting Rules (Prettier)
-
-```javascript
-{
-  printWidth: 120,
-  semi: true,
-  singleQuote: true,
-  tabWidth: 2,
-  trailingComma: 'es5',
-  useTabs: false
-}
-```
-
-### Documentation Style
-
-- Use comprehensive JSDoc comments with `@module` for modules
-- Include parameter types and return types in JSDoc
-- Provide usage examples for complex functions
-- Use `/** @type {...} */` for type assertions
-
-### Error Handling Patterns
-
-```typescript
-// Standard error handling structure
-try {
-  const result = await someOperation();
-  return result;
-} catch (error) {
-  logger.error(`Failed to perform operation: ${getErrorMessage(error)}`);
-  return defaultValue; // or rethrow if critical
-}
-
-// Error message helper
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
-  return 'Unknown error';
-}
-```
-
-### Async Patterns
-
-- Prefer `async/await` over Promise chains
-- Use `Promise.all` for concurrent operations
-- Handle `iteratePaginatedAPI` with async generators
-- Proper resource cleanup in try/catch/finally blocks
-
-### Type Safety Guidelines
-
-- Use Zod schemas for runtime validation
-- Leverage Notion SDK type guards (`isFullPage`, `isFullDatabase`)
-- Create discriminated unions for file types
-- Use proper generic constraints
-
-## File Structure & Architecture
-
-```
+```text
 src/
-├── index.ts              # Main exports only
-├── loader.ts             # Core Astro loader implementation
-├── render.ts             # HTML processing pipeline
-├── image.ts              # Image handling utilities
-├── types.ts              # Internal type definitions
-├── format.ts             # Data transformation utilities
-├── datasource-properties.ts # Dynamic schema generation
-├── schemas/              # Zod schemas (exported separately)
-└── rehype/
-    └── rehype-images.ts  # Custom rehype plugin
+|-- index.ts                    Public exports
+|-- loader.ts                   Content Layer schema, pagination, caching, and store writes
+|-- render.ts                   Notion block rendering and asset metadata
+|-- asset.ts                    Astro asset conversion
+|-- image.ts                    Image download and path handling
+|-- datasource-properties.ts    Dynamic data-source schema generation
+|-- format.ts                   Notion value transformations
+|-- types.ts                    Shared internal types
+|-- utils.ts                    Shared utilities
+|-- schemas/                    Runtime schemas and schema exports
+`-- rehype/                     Rendering plugins for assets and images
+tests/
+|-- astro-v6-support.test.ts    Astro compatibility coverage
+`-- typecheck/                  Compile-only Astro collection fixture
+docs/
+`-- CONTRIBUTING.md             Contributor and maintainer release process
 ```
 
-### Module Principles
+## Code Style
 
-- Each module has single responsibility
-- Export types separately from implementations
-- Use barrel exports (`index.ts`) for clean public APIs
-- Keep utilities pure and functional
+- Follow `.prettierrc.cjs`: 120-column width, semicolons, single quotes, two spaces, and ES5 trailing commas.
+- Use `import type` for type-only imports.
+- Include `.js` extensions on local TypeScript imports because the package compiles as NodeNext ESM.
+- Use the `node:` prefix for Node.js built-ins.
+- Prefer straightforward control flow, early returns, and descriptive intermediate variables over dense expressions.
+- Keep modules focused and avoid new abstractions or dependencies unless they reduce concrete complexity.
+- Use runtime schemas at external boundaries and keep them aligned with their TypeScript types.
+- Treat Notion API responses as external data and use SDK type guards where applicable.
 
-## Important Development Notes
+## Naming Conventions
 
-### ESM Requirements
+- Files and directories use kebab-case.
+- Variables and functions use camelCase.
+- Types, interfaces, classes, and schemas representing named types use PascalCase.
+- Module-level constants use UPPER_SNAKE_CASE.
+- Private class fields use `#camelCase`.
+- Public names should describe the Notion or Astro concept they represent; avoid generic names without domain context.
 
-- All imports must use `.js` extensions for local modules
-- Use `node:` prefix for Node.js built-ins
-- No default exports unless necessary
+## Documentation
 
-### Package Structure
+- Begin source files with a concise file-level doc comment describing their responsibility.
+- Add JSDoc or TSDoc to functions and to type, interface, and enum declarations.
+- Omit `@param` and `@returns` when the TypeScript signature already makes the contract clear.
+- Use `@throws` only for custom or business-logic exceptions that are part of the contract.
+- Add `@example` only when correct usage is not obvious.
+- Explain why a non-obvious constraint exists; do not restate self-explanatory code.
+- Keep TODO and FIXME comments actionable and specific.
 
-- Multiple export paths configured in package.json
-- Main exports: `.`, `./schemas/*`
-- Both `import` and `types` fields required per export
+## Implementation Notes
 
-### Dependencies
+- `src/loader.ts` owns Astro Content Layer schema creation, Notion data-source pagination, digest caching, and store writes. `src/render.ts` fetches page blocks and produces HTML plus asset metadata.
+- Query the Notion `dataSources` API, not the deprecated database query API.
+- Notion-hosted `file` assets are downloaded beneath `<cwd>/src/<imageSavePath>`. Keep `imageSavePath` relative to `src`; moving these files to `public/` bypasses Astro's asset pipeline. External image URLs remain remote.
+- Store entries intentionally use virtual paths under `src/content/notion/` and pass rendered image paths through `assetImports`. Preserve both pieces when changing rendering or image handling.
+- Set `FORCE_RERENDER` to bypass the `last_edited_time` digest cache while debugging loader output.
+- `fileToImageAsset` calls `astro:assets` and is server-only. Do not make it reachable from hydrated or browser-only code.
+- The deprecated public `archived` option is translated to the SDK's `in_trash`; explicit `in_trash` wins. Keep this behavior covered by the compatibility suite.
 
-- Never add dependencies without checking existing alternatives
-- Prefer Notion SDK methods over custom implementations
-- Use existing rehype plugins when available
+## Quality Checklist
 
-### When Working with Images
+- Formatting, typecheck, tests, and build pass in CI order.
+- New behavior and regressions have focused Vitest coverage, including error paths and edge cases where relevant.
+- Local imports use `.js` extensions and type-only imports use `import type`.
+- Names follow the repository conventions and public APIs have appropriate documentation.
+- Error messages include operation context without exposing secrets.
+- New public types and schemas are exported from the appropriate module.
+- Runtime schema changes remain aligned with TypeScript types.
+- Loader changes preserve virtual content paths, `assetImports`, cache behavior, and compatibility semantics.
 
-- Images are saved to `src/assets/images/notion` by default
-- Public path defaults to `public`
-- Use `VIRTUAL_CONTENT_ROOT` for internal paths
-- Handle both external and hosted image types
+## Releases
 
-## Testing Guidelines
-
-When adding tests (using Vitest):
-
-- Place test files in `src/**/*.test.ts` or create `tests/` directory
-- Test error paths and edge cases
-- Mock Notion API calls for unit tests
-- Test schema validation with Zod
-- Verify image handling logic separately
-
-## Common Pitfalls
-
-1. **Missing .js extensions**: Local imports need explicit extensions
-2. **Type imports**: Always use `import type` for type-only imports
-3. **Async generators**: `iteratePaginatedAPI` returns async generators
-4. **Zod validation**: Runtime schemas should match TypeScript types
-5. **Image paths**: Use `path.join()` and absolute paths consistently
-6. **Logging**: Use Astro's integration logger with forked loggers
-7. **Error messages**: Include context and operation details
-
-## Quality Checklist Before Submitting Changes
-
-- [ ] Code builds with `pnpm run build`
-- [ ] Type checking passes (`tsc --noEmit`)
-- [ ] Code formatted with Prettier
-- [ ] Imports follow the established order
-- [ ] Error handling is consistent
-- [ ] JSDoc comments are present for public APIs
-- [ ] Private fields use `#` prefix
-- [ ] Local imports use `.js` extensions
-- [ ] New types are exported from appropriate modules
-- [ ] Schema changes are reflected in Zod validation
+- Contributors do not change package versions or create release tags.
+- For an explicit maintainer release task, follow `docs/CONTRIBUTING.md`; it is the canonical versioning, publishing, verification, and recovery procedure.
