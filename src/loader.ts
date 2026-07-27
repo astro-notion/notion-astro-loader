@@ -13,7 +13,8 @@ import * as transformedPropertySchema from './schemas/transformed-properties.js'
 import type { ClientOptions, DataSourcePropertyConfigResponse, QueryDataSourceParameters } from './types.js';
 
 export interface NotionLoaderOptions
-  extends Pick<ClientOptions, 'auth' | 'timeoutMs' | 'baseUrl' | 'notionVersion' | 'fetch' | 'agent'>,
+  extends
+    Pick<ClientOptions, 'auth' | 'timeoutMs' | 'baseUrl' | 'notionVersion' | 'fetch' | 'agent'>,
     Pick<
       QueryDataSourceParameters,
       'data_source_id' | 'filter_properties' | 'sorts' | 'filter' | 'in_trash' | 'archived'

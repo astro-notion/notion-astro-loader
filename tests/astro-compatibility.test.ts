@@ -1,5 +1,5 @@
 /**
- * Verifies the Astro 6-facing unit-level contract for this package.
+ * Verifies the supported Astro-facing unit-level contract for this package.
  *
  * Covered here:
  * - `notionLoader` naming, `createSchema()` shape, representative schema inference, and stored entry semantics
@@ -9,12 +9,13 @@
  *
  * Not covered here:
  * - real Astro collection integration, real Notion SDK/network behavior, or end-to-end rendering
- * - rehype plugin loading, actual `NotionPageRenderer` output, or image download/caching internals
- * - loader error paths, unchanged-page skip behavior, logging details, or precedence when both `in_trash` and `archived` are provided
+ * - configured rehype plugin loading, actual `NotionPageRenderer` output, or image download/caching internals
+ * - loader error paths or logging details
  * - exhaustive coverage of all exported property schemas and formatter helpers
  */
 
 import { z } from 'astro/zod';
+import { VFile } from 'vfile';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { NotionPageData } from '../src/types.js';
@@ -56,6 +57,8 @@ vi.mock('astro:assets', () => ({
 import { fileToImageAsset } from '../src/format.js';
 import { VIRTUAL_CONTENT_ROOT } from '../src/image.js';
 import { notionLoader } from '../src/loader.js';
+import { rehypeAssets } from '../src/rehype/rehype-assets.js';
+import { rehypeImages } from '../src/rehype/rehype-images.js';
 import { NotionPageRenderer } from '../src/render.js';
 import { notionPageSchema, pageObjectSchema } from '../src/schemas/page.js';
 import * as rawPropertySchema from '../src/schemas/raw-properties.js';
@@ -208,7 +211,7 @@ afterEach(() => {
 });
 
 describe('notionLoader', () => {
-  it('returns an Astro 6 loader with the expected names', () => {
+  it('returns an Astro loader with the expected names', () => {
     expect(notionLoader({ auth: 'token', data_source_id: 'ds-1' }).name).toBe('notion-loader');
     expect(notionLoader({ auth: 'token', data_source_id: 'ds-1', collectionName: 'blog' }).name).toBe(
       'notion-loader/blog'
@@ -305,6 +308,28 @@ describe('notionLoader', () => {
     });
   });
 
+  it('skips rendering when the stored digest matches the Notion page', async () => {
+    const page = createPage();
+    notionApi.queryResults = [page];
+
+    const loader = notionLoader({
+      auth: 'token',
+      data_source_id: 'ds-1',
+    }) as LoaderWithSchema;
+    const store = createStore([{ id: page.id, digest: page.last_edited_time }]);
+    const parseData = vi.fn(async (entry: unknown) => entry);
+    const getPageData = vi.spyOn(NotionPageRenderer.prototype, 'getPageData');
+    const render = vi.spyOn(NotionPageRenderer.prototype, 'render');
+
+    await loader.load({ store, logger: createLogger(), parseData } as never);
+
+    expect(getPageData).not.toHaveBeenCalled();
+    expect(render).not.toHaveBeenCalled();
+    expect(parseData).not.toHaveBeenCalled();
+    expect(store.set).not.toHaveBeenCalled();
+    expect(store.delete).not.toHaveBeenCalled();
+  });
+
   it('forwards in_trash to the data source query', async () => {
     const loader = notionLoader({
       auth: 'token',
@@ -346,6 +371,29 @@ describe('notionLoader', () => {
       sorts: undefined,
       filter: undefined,
       in_trash: true,
+    });
+  });
+
+  it('prefers explicit in_trash queries over deprecated archived queries', async () => {
+    const loader = notionLoader({
+      auth: 'token',
+      data_source_id: 'ds-1',
+      in_trash: false,
+      archived: true,
+    }) as LoaderWithSchema;
+
+    await loader.load({
+      store: createStore(),
+      logger: createLogger(),
+      parseData: vi.fn(async (entry: unknown) => entry),
+    } as never);
+
+    expect(notionApi.iteratePaginatedAPI).toHaveBeenCalledWith(notionApi.query, {
+      data_source_id: 'ds-1',
+      filter_properties: undefined,
+      sorts: undefined,
+      filter: undefined,
+      in_trash: false,
     });
   });
 });
@@ -432,6 +480,48 @@ describe('exported schemas', () => {
         })
         .toISOString()
     ).toBe('2026-04-25T10:00:00.000Z');
+  });
+});
+
+describe('Astro image metadata plugins', () => {
+  it('records rendered Notion image paths and marks matching images', () => {
+    const astroData = {};
+    const file = new VFile();
+    file.data.astro = astroData;
+    const image = {
+      type: 'element',
+      tagName: 'img',
+      properties: { src: 'src/notion.png' },
+      children: [],
+    };
+    const tree = { type: 'root', children: [image] };
+
+    rehypeImages()({ imagePaths: ['src/notion.png'] })(tree, file);
+
+    expect(astroData).toEqual({ localImagePaths: ['src/notion.png'] });
+    expect(image.properties).toEqual({
+      __ASTRO_IMAGE_: JSON.stringify({ src: 'src/notion.png', index: 0 }),
+    });
+  });
+
+  it('records local asset paths and marks matching Astro image formats', () => {
+    const astroData = {};
+    const file = new VFile();
+    file.data.astro = astroData;
+    const image = {
+      type: 'element',
+      tagName: 'img',
+      properties: { src: 'assets/notion.png' },
+      children: [],
+    };
+    const tree = { type: 'root', children: [image] };
+
+    rehypeAssets()({ assetPaths: ['assets/notion.png'] })(tree, file);
+
+    expect(astroData).toEqual({ localImagePaths: ['assets/notion.png'] });
+    expect(image.properties).toEqual({
+      __ASTRO_IMAGE_: JSON.stringify({ src: 'assets/notion.png', index: 0 }),
+    });
   });
 });
 

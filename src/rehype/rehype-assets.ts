@@ -1,8 +1,16 @@
+/** Marks local assets for Astro image processing in rendered Notion content. */
+
 import { visit } from 'unist-util-visit';
 import type { VFile } from 'vfile';
 
+/** Asset paths supplied to the rehype plugin. */
 interface Config {
   assetPaths?: string[];
+}
+
+/** Astro metadata used by the unified processor when it is available. */
+interface AstroVFileData {
+  localImagePaths?: string[];
 }
 
 const ASTRO_IMAGE_FORMATS = ['avif', 'webp', 'png', 'jpg', 'jpeg', 'gif'];
@@ -25,7 +33,8 @@ export function rehypeAssets() {
           node.properties.src = src;
 
           // Add Astro metadata
-          if (file.data.astro) file.data.astro.localImagePaths = assetPaths;
+          const astroData = file.data.astro as AstroVFileData | undefined;
+          if (astroData) astroData.localImagePaths = assetPaths;
 
           // Handle Astro image optimization
           if (node.tagName === 'img' && assetPaths?.includes(src) && isAstroImageFormat(src)) {

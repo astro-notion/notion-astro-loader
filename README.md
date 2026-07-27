@@ -8,7 +8,7 @@
 
 [Notion](https://developers.notion.com/) loader for the [Astro Content Layer API](https://docs.astro.build/en/guides/content-collections/). It allows you to load pages from a Notion data source, then render them as entries in a collection.
 
-This release line targets `astro@>=6 <7` and Node.js `>=22.12.0`.
+This release line targets `astro@>=6 <8` and Node.js `>=22.13.0`.
 
 Contributions are welcome. See [Contributing and Releasing](docs/CONTRIBUTING.md) for contributor expectations and the canonical maintainer release procedure.
 
@@ -16,8 +16,10 @@ Contributions are welcome. See [Contributing and Releasing](docs/CONTRIBUTING.md
 
 Requirements:
 
-- Astro `>=6 <7`
-- Node.js `>=22.12.0`
+- Astro `>=6 <8`
+- Node.js `>=22.13.0`
+
+Astro 6 and Astro 7 use the same loader configuration and public exports. No version-specific consumer setup or behavioral differences are currently known. `fileToImageAsset` remains server-only under both supported majors because Astro's `getImage()` API relies on server-only APIs.
 
 ```sh
 # npm
@@ -132,7 +134,7 @@ For file urls in **body**, the loader will try to download the images and cache 
 
 For file urls in **cover**, the loader will not download them. Instead, use the `fileToImageAsset` helper exported from `@astro-notion/loader` from server-side Astro code to convert the Notion file object into a `GetImageResult`.
 
-`fileToImageAsset` is a server-only helper under Astro 6 because it calls `getImage()` from `astro:assets`. Use it in build-time or server execution paths such as content loaders, `.astro` frontmatter, endpoints, or other server code. Do not use it in hydrated client components or browser-only code.
+`fileToImageAsset` is a server-only helper under Astro 6 and Astro 7 because it calls `getImage()` from `astro:assets`. Use it in build-time or server execution paths such as content loaders, `.astro` frontmatter, endpoints, or other server code. Do not use it in hydrated client components or browser-only code.
 
 #### Why & How ?
 
@@ -190,7 +192,7 @@ A few helper functions are provided for transforming Notion API objects into sim
 
 - `richTextToPlainText` converts [rich text](https://developers.notion.com/reference/rich-text) into plain strings
 - `fileToUrl` converts [file objects](https://developers.notion.com/reference/file-object) to a URL string.
-- `fileToImageAsset` converts [file objects](https://developers.notion.com/reference/file-object) to an image asset using the [Astro Asset API](https://docs.astro.build/en/reference/modules/astro-assets/#getimage). This helper is server-only under Astro 6.
+- `fileToImageAsset` converts [file objects](https://developers.notion.com/reference/file-object) to an image asset using the [Astro Asset API](https://docs.astro.build/en/reference/modules/astro-assets/#getimage). This helper is server-only under Astro 6 and Astro 7.
 - `dateToDateObjects` converts the strings in a [date property](https://developers.notion.com/reference/page-property-values#date) into `Date`s.
 
 ## FAQ

@@ -1,8 +1,16 @@
+/** Marks rendered Notion images for Astro image processing. */
+
 import { visit } from 'unist-util-visit';
 import type { VFile } from 'vfile';
 
+/** Image paths supplied to the rehype plugin. */
 interface Config {
   imagePaths?: string[];
+}
+
+/** Astro metadata used by the unified processor when it is available. */
+interface AstroVFileData {
+  localImagePaths?: string[];
 }
 
 export function rehypeImages() {
@@ -16,9 +24,8 @@ export function rehypeImages() {
 
         if (node.properties?.src) {
           node.properties.src = decodeURI(node.properties.src);
-          if (file.data.astro) {
-            file.data.astro.localImagePaths = imagePaths;
-          }
+          const astroData = file.data.astro as AstroVFileData | undefined;
+          if (astroData) astroData.localImagePaths = imagePaths;
 
           if (imagePaths?.includes(node.properties.src)) {
             const { ...props } = node.properties;

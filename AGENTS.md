@@ -9,7 +9,7 @@ A TypeScript package that loads Notion data sources into Astro Content Layer col
 - Notion SDK `dataSources` API.
 - Unified and rehype for rendering Notion pages.
 - Vitest for tests and Prettier for formatting.
-- Node.js 22.12.0 or newer and pnpm 10.
+- Node.js 22.13.0 or newer and pnpm 11.
 
 ## Key Commands
 
@@ -19,8 +19,9 @@ A TypeScript package that loads Notion data sources into Astro Content Layer col
 - `pnpm exec prettier --check "src/**/*.{ts,js,json}"`: check source formatting.
 - `pnpm typecheck`: check `src/` and the compile-only Astro collection fixture in `tests/typecheck/`.
 - `pnpm test`: run the Vitest suite.
-- `pnpm exec vitest run tests/astro-v6-support.test.ts`: run the compatibility suite alone.
-- Match CI locally in this order: formatting, typecheck, tests, then build.
+- `pnpm exec vitest run tests/astro-compatibility.test.ts`: run the compatibility suite alone.
+- `pnpm test:compat`: run isolated package checks against Astro 6 and Astro 7.
+- Match CI locally in this order: formatting, typecheck, compatibility, tests, then build.
 
 ## File Structure
 

@@ -4,7 +4,7 @@ This is the canonical contribution guide and maintainer release procedure for `@
 
 ## Prerequisites
 
-- Node.js `>=22.12.0`
+- Node.js `>=22.13.0`
 - The pnpm version pinned in `package.json` through Corepack or `pnpm/action-setup`
 - Git and a GitHub account
 - For maintainers: permission to push release commits and tags to `main`, publish `@astro-notion/loader` on npm, and create GitHub Releases
@@ -16,6 +16,7 @@ corepack enable
 pnpm install --frozen-lockfile
 pnpm exec prettier --check "src/**/*.{ts,js,json}"
 pnpm typecheck
+pnpm test:compat
 pnpm test
 pnpm build
 ```
@@ -57,6 +58,7 @@ git switch main
 git pull --ff-only origin main
 pnpm install --frozen-lockfile
 pnpm typecheck
+pnpm test:compat
 pnpm test
 pnpm build
 git status --short
@@ -98,6 +100,7 @@ git pull --ff-only origin main
 test "$(node -p "require('./package.json').version")" = "2.0.0-beta.1"
 pnpm install --frozen-lockfile
 pnpm typecheck
+pnpm test:compat
 pnpm test
 pnpm build
 git tag -a v2.0.0-beta.1 -m "Release v2.0.0-beta.1"

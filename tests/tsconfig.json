@@ -5,7 +5,11 @@
     "rootDir": "..",
     "noEmit": true,
     "declaration": false,
-    "declarationMap": false
+    "declarationMap": false,
+    "paths": {
+      "@astro-notion/loader": ["../src/index.ts"],
+      "@astro-notion/loader/schemas": ["../src/schemas/index.ts"]
+    }
   },
   "include": ["typecheck/**/*.ts"]
 }
