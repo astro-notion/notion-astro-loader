@@ -30,14 +30,13 @@ src/
 |-- index.ts                    Public exports
 |-- loader.ts                   Content Layer schema, pagination, caching, and store writes
 |-- render.ts                   Notion block rendering and asset metadata
-|-- asset.ts                    Astro asset conversion
-|-- image.ts                    Image download and path handling
+|-- asset.ts                    Hosted asset download and path handling
 |-- datasource-properties.ts    Dynamic data-source schema generation
 |-- format.ts                   Notion value transformations
 |-- types.ts                    Shared internal types
 |-- utils.ts                    Shared utilities
 |-- schemas/                    Runtime schemas and schema exports
-`-- rehype/                     Rendering plugins for assets and images
+`-- rehype/                     Astro image metadata rendering plugin
 tests/
 |-- astro-v6-support.test.ts    Astro compatibility coverage
 `-- typecheck/                  Compile-only Astro collection fixture
@@ -79,8 +78,9 @@ docs/
 
 - `src/loader.ts` owns Astro Content Layer schema creation, Notion data-source pagination, digest caching, and store writes. `src/render.ts` fetches page blocks and produces HTML plus asset metadata.
 - Query the Notion `dataSources` API, not the deprecated database query API.
-- Notion-hosted `file` assets are downloaded beneath `<cwd>/src/<imageSavePath>`. Keep `imageSavePath` relative to `src`; moving these files to `public/` bypasses Astro's asset pipeline. External image URLs remain remote.
-- Store entries intentionally use virtual paths under `src/content/notion/` and pass rendered image paths through `assetImports`. Preserve both pieces when changing rendering or image handling.
+- Notion-hosted images are downloaded beneath `<cwd>/src/<imageSavePath>` for Astro processing. Documents and media are downloaded beneath `publicPath` for direct serving, and all external asset URLs remain remote.
+- Store entries intentionally use virtual paths under `src/content/notion/` and pass only source image paths through `assetImports`. Preserve virtual paths, source `assetImports`, and base-prefixed public asset URLs when changing rendering or asset handling.
+- `src/asset.ts` owns generic Notion-hosted downloading and path resolution. Keep Astro optimization concerns in image-specific APIs such as `rehypeImages` and `fileToImageAsset`.
 - Set `FORCE_RERENDER` to bypass the `last_edited_time` digest cache while debugging loader output.
 - `fileToImageAsset` calls `astro:assets` and is server-only. Do not make it reachable from hydrated or browser-only code.
 - The deprecated public `archived` option is translated to the SDK's `in_trash`; explicit `in_trash` wins. Keep this behavior covered by the compatibility suite.

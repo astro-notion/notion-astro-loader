@@ -38,7 +38,7 @@ vi.mock('astro:assets', () => ({
   getImage: vi.fn(),
 }));
 
-import { VIRTUAL_CONTENT_ROOT } from '../src/image.js';
+import { VIRTUAL_CONTENT_ROOT } from '../src/asset.js';
 import { notionLoader } from '../src/loader.js';
 import { NotionPageRenderer } from '../src/render.js';
 import { pageObjectSchema } from '../src/schemas/page.js';

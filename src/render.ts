@@ -17,12 +17,14 @@ import { toc as rehypeToc } from '@jsdevtools/rehype-toc';
 import { isFullBlock, iteratePaginatedAPI, type Client } from '@notionhq/client';
 import { dim } from 'kleur/colors';
 
+import { resolveSourceAssetPath, saveNotionAsset } from './asset.js';
 import { fileToUrl } from './format.js';
-import { saveImageFromAWS, transformImagePathForCover } from './image.js';
 import { rehypeImages } from './rehype/rehype-images.js';
 import type { AssetObject, FileObject, NotionPageData, PageObjectResponse } from './types.js';
 
 export type RehypePlugin = Plugin<any[], any>;
+
+type AssetDestination = 'source' | 'public';
 
 /** Ensures downstream rehype plugins receive complete HAST element nodes. */
 function rehypeElementProperties() {
@@ -198,7 +200,7 @@ export interface RenderedNotionEntry {
 }
 
 export class NotionPageRenderer {
-  #assetPaths: string[] = [];
+  #imagePaths: string[] = [];
   #assetAnalytics = {
     download: 0,
     cached: 0,
@@ -208,7 +210,7 @@ export class NotionPageRenderer {
   /**
    * @param client Notion API client.
    * @param page Notion page object including page ID and properties. Does not include blocks.
-   * @param imageSavePath Directory where Notion-hosted assets are saved.
+   * @param imageSavePath Directory where Notion-hosted images are saved.
    * @param logger Logger to use for rendering messages.
    * @param publicAssetPath Directory where non-image assets are saved for direct serving.
    * @param publicAssetUrlPath URL prefix corresponding to `publicAssetPath`.
@@ -241,7 +243,7 @@ export class NotionPageRenderer {
       const fetchedCover = await this.#fetchImageAsset(cover);
       const coverPath = fileToUrl(fetchedCover);
       if (coverPath && fetchedCover.type === 'file') {
-        const transformedUrl = `${rootAlias}/${transformImagePathForCover(coverPath)}`;
+        const transformedUrl = `${rootAlias}/${resolveSourceAssetPath(coverPath)}`;
         cover = {
           ...cover,
           file: {
@@ -312,14 +314,14 @@ export class NotionPageRenderer {
         );
       }
 
-      const { vFile, headings } = await process(blocks, this.#assetPaths);
+      const { vFile, headings } = await process(blocks, this.#imagePaths);
       this.#logger.debug('Rendered page');
 
       return {
         html: vFile.toString(),
         metadata: {
           headings,
-          imagePaths: this.#assetPaths,
+          imagePaths: this.#imagePaths,
         },
       };
     } catch (error) {
@@ -328,20 +330,20 @@ export class NotionPageRenderer {
     }
   }
 
-  #fetchImageAsset = <T extends AssetObject>(assetObject: T): Promise<T> => this.#fetchAsset(assetObject, false);
+  #fetchImageAsset = <T extends AssetObject>(assetObject: T): Promise<T> => this.#fetchAsset(assetObject, 'source');
 
-  #fetchPublicAsset = <T extends AssetObject>(assetObject: T): Promise<T> => this.#fetchAsset(assetObject, true);
+  #fetchPublicAsset = <T extends AssetObject>(assetObject: T): Promise<T> => this.#fetchAsset(assetObject, 'public');
 
-  #fetchAsset = async <T extends AssetObject>(assetObject: T, serveFromPublic: boolean): Promise<T> => {
+  #fetchAsset = async <T extends AssetObject>(assetObject: T, destination: AssetDestination): Promise<T> => {
     try {
       if (assetObject.type !== 'file') {
         return assetObject;
       }
 
-      const publicAssetPath = serveFromPublic ? this.publicAssetPath : undefined;
+      const publicAssetPath = destination === 'public' ? this.publicAssetPath : undefined;
       const assetSavePath = publicAssetPath ?? this.imageSavePath;
       fse.ensureDirSync(assetSavePath);
-      const savedAssetPath = await saveImageFromAWS(assetObject.file.url, assetSavePath, {
+      const savedAssetPath = await saveNotionAsset(assetObject.file.url, assetSavePath, {
         log: (message) => {
           this.#logger.debug(message);
         },
@@ -354,7 +356,7 @@ export class NotionPageRenderer {
       const assetUrl = publicAssetPath
         ? path.posix.join(this.publicAssetUrlPath, savedAssetPath.split(path.sep).join('/'))
         : savedAssetPath;
-      if (!publicAssetPath) this.#assetPaths.push(assetUrl);
+      if (destination === 'source') this.#imagePaths.push(assetUrl);
 
       return {
         ...assetObject,

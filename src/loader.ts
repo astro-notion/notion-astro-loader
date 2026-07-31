@@ -6,8 +6,8 @@ import { dim } from 'kleur/colors';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { VIRTUAL_CONTENT_ROOT } from './asset.js';
 import { propertiesSchemaForDatasourceProperties } from './datasource-properties.js';
-import { VIRTUAL_CONTENT_ROOT } from './image.js';
 import { buildProcessor, NotionPageRenderer, type RehypePlugin } from './render.js';
 import { notionPageSchema } from './schemas/page.js';
 import * as transformedPropertySchema from './schemas/transformed-properties.js';
@@ -42,7 +42,7 @@ export interface NotionLoaderOptions
    */
   imageSavePath?: string;
   /**
-   * Whether to cache images in the data.
+   * Whether to cache hosted covers, icons, and file properties in page data.
    * Defaults to `false`.
    */
   experimentalCacheImageInData?: boolean;

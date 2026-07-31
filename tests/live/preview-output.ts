@@ -5,7 +5,7 @@
 import { copyFile, mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { VIRTUAL_CONTENT_ROOT } from '../../src/image.js';
+import { VIRTUAL_CONTENT_ROOT } from '../../src/asset.js';
 
 /** Result paths and counts produced by local live-preview generation. */
 export interface LivePreviewResult {

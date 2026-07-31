@@ -88,9 +88,12 @@ const posts = defineCollection({
   loader: notionLoader({
     auth: import.meta.env.NOTION_TOKEN,
     data_source_id: import.meta.env.NOTION_DATASOURCE_ID,
-    // Optional: tell loader where to store downloaded aws images, relative to 'src' directory
+    // Optional: store Notion-hosted images below src for Astro image processing
     // Default value is 'assets/images/notion'
     imageSavePath: 'assets/images/notion',
+    // Optional: store Notion-hosted documents and media below Astro's public directory
+    // Default value is Astro's configured publicDir
+    publicPath: 'public/notion-assets',
     // Use Notion sorting and filtering with the same options like notionhq client
     filter: {
       property: 'Hidden',
@@ -118,7 +121,9 @@ The `notionLoader` function takes an object with the same options as `notionClie
 
 - `auth`: The API key for your Notion integration.
 - `data_source_id`: The Notion data source ID to load pages from.
-- `imageSavePath`: The directory to save downloaded images into. Default is `assets/images/notion`.
+- `imageSavePath`: The `src`-relative directory for downloaded images processed by Astro. Default is `assets/images/notion`.
+- `publicPath`: The project-relative directory for downloaded documents, PDFs, video, and audio served directly by Astro. It must be inside Astro's configured `publicDir` and defaults to `publicDir`.
+- `experimentalCacheImageInData`: Localizes hosted covers and icons under `imageSavePath` and hosted file properties under `publicPath`. External URLs remain unchanged. Default is `false`.
 
 ## Advanced Utilities
 
@@ -128,11 +133,11 @@ The `notionLoader` function takes an object with the same options as `notionClie
 >
 > This is **significantly different** from the original Notion loader!
 
-Notion has 2 types of images: file and external url. Notion loader will **not** process external urls.
+Notion assets can use hosted `file` URLs or external URLs. The loader downloads hosted files because their signed URLs expire, while external image, document, and media URLs pass through unchanged.
 
-For file urls in **body**, the loader will try to download the images and cache them locally at the `imageSavePath` directory that defined in loader's config. You do not need to care about this process since the loader will do it automatically under the hood.
+Hosted images in page content are cached below `src/<imageSavePath>` and registered with Astro's asset pipeline. Hosted documents, PDFs, video, and audio are cached below `publicPath` and rendered as URLs beneath Astro's configured base path. Keeping these destinations separate lets Astro optimize images without treating directly served files as image imports.
 
-For file urls in **cover**, the loader will not download them. Instead, use the `fileToImageAsset` helper exported from `@astro-notion/loader` from server-side Astro code to convert the Notion file object into a `GetImageResult`.
+Hosted covers, icons, and file properties retain their original URLs by default. Enable `experimentalCacheImageInData` to localize them using the same source-image and public-asset destinations. Alternatively, use the `fileToImageAsset` helper exported from `@astro-notion/loader` from server-side Astro code to convert a Notion image file object into a `GetImageResult`.
 
 `fileToImageAsset` is a server-only helper under Astro 6 and Astro 7 because it calls `getImage()` from `astro:assets`. Use it in build-time or server execution paths such as content loaders, `.astro` frontmatter, endpoints, or other server code. Do not use it in hydrated client components or browser-only code.
 

@@ -8,7 +8,7 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { VIRTUAL_CONTENT_ROOT } from '../src/image.js';
+import { VIRTUAL_CONTENT_ROOT } from '../src/asset.js';
 import { getLiveTestConfig } from './live/config.js';
 import { normalizeLiveSnapshot } from './live/normalize.js';
 import { writeLivePreview } from './live/preview-output.js';

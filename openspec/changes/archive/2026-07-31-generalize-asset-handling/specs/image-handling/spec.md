@@ -1,11 +1,6 @@
-# Capability: Image Handling
+## MODIFIED Requirements
 
-## Purpose
-
-Download and cache Notion-hosted images from AWS S3 to the local filesystem, transform image paths for Astro's asset processing pipeline, and provide a rehype plugin for image element transformation.
-## Requirements
 ### Requirement: Cover Image Path Transformation
-
 The system SHALL convert a downloaded cover path from the virtual content root to a path relative to the project's `src` directory before applying the configured source alias.
 
 #### Scenario: Transform a hosted cover path
@@ -14,7 +9,6 @@ The system SHALL convert a downloaded cover path from the virtual content root t
 - **AND** returned relative to `src` with the configured source alias
 
 ### Requirement: External Image Passthrough
-
 The renderer SHALL pass through external image, cover, and icon URLs without downloading them.
 
 #### Scenario: External image URL
@@ -28,7 +22,6 @@ The renderer SHALL pass through external image, cover, and icon URLs without dow
 - **AND** its local path is eligible for Astro image processing
 
 ### Requirement: Rehype Image Plugin
-
 The `rehypeImages` plugin SHALL transform only matching rendered image elements for Astro's asset import system.
 
 #### Scenario: Mark image for Astro processing
@@ -48,12 +41,28 @@ The `rehypeImages` plugin SHALL transform only matching rendered image elements 
 - **WHEN** Astro file metadata is available during processing
 - **THEN** the plugin attaches `imagePaths` as `file.data.astro.localImagePaths`
 
-### Requirement: Hosted Image HTTP Response Validation
+## REMOVED Requirements
 
-`saveImageFromAWS` SHALL reject non-successful HTTP responses before reading or writing response content.
+### Requirement: AWS Image Download
+**Reason**: Hosted download behavior applies to all Notion file assets and is no longer coupled to AWS or images.
+**Migration**: Use the `Notion Hosted Asset Download` requirement in the new `asset-handling` capability.
 
-#### Scenario: Image download receives non-successful response
-- **WHEN** `saveImageFromAWS` receives a response whose `ok` value is false
-- **THEN** it throws an error containing the download operation and HTTP status
-- **AND** the error does not contain the signed source URL
-- **AND** no destination image is created or replaced
+### Requirement: Image Caching
+**Reason**: Cache behavior is shared by every downloaded Notion-hosted asset.
+**Migration**: Use the `Hosted Asset Cache` requirement in the new `asset-handling` capability.
+
+### Requirement: Directory Structure
+**Reason**: The path layout is shared by image and non-image assets.
+**Migration**: Use the `Stable Hosted Asset Path` requirement in the new `asset-handling` capability.
+
+### Requirement: Path Output
+**Reason**: Relative output paths vary by source and public asset destinations rather than image type.
+**Migration**: Use the `Asset Destination Paths` requirement in the new `asset-handling` capability.
+
+### Requirement: Logging and Tagging
+**Reason**: Download and cache diagnostics report every hosted asset type.
+**Migration**: Use the `Asset Download Diagnostics` requirement in the new `asset-handling` capability.
+
+### Requirement: Virtual Content Root
+**Reason**: The virtual root belongs to shared entry and asset path handling.
+**Migration**: Use the `Virtual Content Root` requirement in the new `asset-handling` capability.

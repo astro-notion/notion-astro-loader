@@ -1,18 +1,28 @@
 ## MODIFIED Requirements
 
-### Requirement: Image Block Processing
+### Requirement: Hosted Asset Block Processing
 
-The renderer SHALL download hosted file, image, video, audio, and PDF block assets and preserve standard Notion asset object shapes for rendering.
+The renderer SHALL process hosted image, file, PDF, video, and audio blocks through the shared Notion asset downloader while preserving standard Notion asset object shapes and block-specific rendering semantics.
 
-#### Scenario: Process supported hosted asset block
-- **WHEN** a supported asset block uses a Notion-hosted file
-- **THEN** the asset is downloaded through the shared asset callback
-- **AND** the block uses the returned local asset path
-- **AND** captions and other block data are preserved
+#### Scenario: Process an image block
+- **WHEN** a block has `type: 'image'` and contains a Notion `file` asset
+- **THEN** the asset is saved under the configured source image destination
+- **AND** the block uses the returned local path
+- **AND** its caption is preserved
+
+#### Scenario: Process a directly served asset block
+- **WHEN** a block has `type: 'file'`, `pdf`, `video`, or `audio` and contains a Notion `file` asset
+- **THEN** the asset is saved under the configured public destination
+- **AND** the block uses a URL under the configured Astro base and public path
 
 #### Scenario: Process PDF block
 - **WHEN** a block has `type: 'pdf'`
 - **THEN** it is downloaded and rendered through the file-block handler
+
+#### Scenario: Preserve an external block asset
+- **WHEN** a supported asset block contains an `external` asset
+- **THEN** the renderer leaves the external URL unchanged
+- **AND** does not download the asset
 
 #### Scenario: Non-asset blocks
 - **WHEN** a block is not a supported asset type

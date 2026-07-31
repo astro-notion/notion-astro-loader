@@ -11,7 +11,7 @@ import { Client, isFullBlock, isFullPage, iteratePaginatedAPI, type PageObjectRe
 import { expect, it, vi } from 'vitest';
 
 import { buildProcessor, NotionPageRenderer } from '../../src/render.js';
-import { VIRTUAL_CONTENT_ROOT } from '../../src/image.js';
+import { VIRTUAL_CONTENT_ROOT } from '../../src/asset.js';
 import { getLiveTestConfig } from './config.js';
 import { normalizeLiveSnapshot } from './normalize.js';
 import { writeLivePreview } from './preview-output.js';

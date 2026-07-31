@@ -16,7 +16,7 @@ const stagedPaths = [
   'tests/fixtures',
   'tests/format.test.ts',
   'tests/loader.test.ts',
-  'tests/rehype-assets.test.ts',
+  'tests/rehype-images.test.ts',
   'tests/schemas.test.ts',
   'tests/tsconfig.json',
   'tests/typecheck',
@@ -205,7 +205,7 @@ async function main() {
         'run',
         'tests/format.test.ts',
         'tests/loader.test.ts',
-        'tests/rehype-assets.test.ts',
+        'tests/rehype-images.test.ts',
         'tests/schemas.test.ts',
       ],
       packageDirectory
