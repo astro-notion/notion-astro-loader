@@ -2,12 +2,14 @@ import type { AstroIntegrationLogger, MarkdownHeading } from 'astro';
 import type { ParseDataOptions } from 'astro/loaders';
 
 // #region Processor
+import notionRehype from '@astro-notion/notion-rehype';
 import * as fse from 'fs-extra';
-import notionRehype from 'notion-rehype-k';
+import path from 'node:path';
 import rehypeKatex from 'rehype-katex';
 import rehypeSlug from 'rehype-slug';
 import rehypeStringify from 'rehype-stringify';
 import { unified, type Plugin } from 'unified';
+import { visit } from 'unist-util-visit';
 import type { VFile } from 'vfile';
 
 import type { HtmlElementNode, ListNode, TextNode } from '@jsdevtools/rehype-toc';
@@ -22,10 +24,20 @@ import type { AssetObject, FileObject, NotionPageData, PageObjectResponse } from
 
 export type RehypePlugin = Plugin<any[], any>;
 
+/** Ensures downstream rehype plugins receive complete HAST element nodes. */
+function rehypeElementProperties() {
+  return (tree: any) => {
+    visit(tree, 'element', (node) => {
+      node.properties ??= {};
+    });
+  };
+}
+
 const baseProcessor = unified()
   // @ts-ignore
   .use(notionRehype, {}) // Parse Notion blocks to rehype AST
   .use(rehypeSlug)
+  .use(rehypeElementProperties)
   // @ts-ignore
   .use(rehypeKatex) // Then you can use any rehype plugins to enrich the AST
   .use(rehypeStringify); // Turn AST to HTML string
@@ -73,7 +85,8 @@ async function awaitAll<T>(iterable: AsyncIterable<T>) {
 async function* listBlocks(
   client: Client,
   blockId: string,
-  fetchAsset: <T extends AssetObject>(asset: T) => Promise<T>
+  fetchImageAsset: <T extends AssetObject>(asset: T) => Promise<T>,
+  fetchPublicAsset: <T extends AssetObject>(asset: T) => Promise<T>
 ) {
   for await (const block of iteratePaginatedAPI(client.blocks.children.list, {
     block_id: blockId,
@@ -83,7 +96,7 @@ async function* listBlocks(
     }
 
     if (block.has_children) {
-      const children = await awaitAll(listBlocks(client, block.id, fetchAsset));
+      const children = await awaitAll(listBlocks(client, block.id, fetchImageAsset, fetchPublicAsset));
 
       // @ts-ignore -- children doesn't exist in the type definition.
       block[block.type].children = children;
@@ -91,23 +104,32 @@ async function* listBlocks(
 
     switch (block.type) {
       case 'file':
-        yield { ...block, file: await getRenderableAsset(block.file, fetchAsset) };
+        yield { ...block, file: await getRenderableAsset(block.file, fetchPublicAsset) };
         break;
       case 'image':
-        yield { ...block, image: await getRenderableAsset(block.image, fetchAsset) };
+        yield { ...block, image: await getRenderableAsset(block.image, fetchImageAsset) };
         break;
       case 'video':
-        yield { ...block, video: await getRenderableAsset(block.video, fetchAsset) };
+        yield { ...block, video: await getRenderableAsset(block.video, fetchPublicAsset) };
         break;
       case 'audio':
-        yield { ...block, audio: await getRenderableAsset(block.audio, fetchAsset) };
+        yield { ...block, audio: await getRenderableAsset(block.audio, fetchPublicAsset) };
+        break;
+      case 'pdf':
+        yield {
+          ...block,
+          type: 'file',
+          file: await getRenderableAsset(block.pdf, fetchPublicAsset),
+        };
         break;
       case 'callout':
         yield {
           ...block,
           callout: {
             ...block.callout,
-            icon: block.callout.icon ? await getRenderableIcon(block.callout.icon, fetchAsset) : block.callout.icon,
+            icon: block.callout.icon
+              ? await getRenderableIcon(block.callout.icon, fetchImageAsset)
+              : block.callout.icon,
           },
         };
         break;
@@ -121,44 +143,14 @@ async function getRenderableAsset<T extends FileObject>(
   asset: T,
   fetchAsset: <Asset extends AssetObject>(asset: Asset) => Promise<Asset>
 ) {
-  const fetchedAsset = await fetchAsset(asset);
-  const url = fileToUrl(fetchedAsset);
-
-  if (!url) {
-    return asset;
-  }
-
-  // notion-rehype-k expects the selected file field as a URL string instead of a Notion file object.
-  return {
-    ...asset,
-    type: fetchedAsset.type,
-    [fetchedAsset.type]: url,
-  };
+  return fetchAsset(asset);
 }
 
 async function getRenderableIcon<T extends AssetObject>(
   icon: T,
   fetchAsset: <Asset extends AssetObject>(asset: Asset) => Promise<Asset>
 ) {
-  if (icon.type === 'emoji') {
-    return icon;
-  }
-
-  const fetchedIcon = await fetchAsset(icon);
-  const url = fileToUrl(fetchedIcon);
-
-  if (!url) {
-    return { type: 'emoji' as const, emoji: '' };
-  }
-
-  if (fetchedIcon.type === 'custom_emoji') {
-    return { type: 'external' as const, external: url };
-  }
-
-  return {
-    type: fetchedIcon.type,
-    [fetchedIcon.type]: url,
-  };
+  return fetchAsset(icon);
 }
 
 function extractTocHeadings(toc: HtmlElementNode): MarkdownHeading[] {
@@ -218,12 +210,16 @@ export class NotionPageRenderer {
    * @param page Notion page object including page ID and properties. Does not include blocks.
    * @param imageSavePath Directory where Notion-hosted assets are saved.
    * @param logger Logger to use for rendering messages.
+   * @param publicAssetPath Directory where non-image assets are saved for direct serving.
+   * @param publicAssetUrlPath URL prefix corresponding to `publicAssetPath`.
    */
   constructor(
     private readonly client: Client,
     private readonly page: PageObjectResponse,
     public readonly imageSavePath: string,
-    logger: AstroIntegrationLogger
+    logger: AstroIntegrationLogger,
+    private readonly publicAssetPath?: string,
+    private readonly publicAssetUrlPath = '/'
   ) {
     this.#logger = logger.fork(`${logger.label}/render`);
   }
@@ -242,7 +238,7 @@ export class NotionPageRenderer {
     let properties = page.properties;
 
     if (cover && transformCoverImage && cover.type === 'file') {
-      const fetchedCover = await this.#fetchAsset(cover);
+      const fetchedCover = await this.#fetchImageAsset(cover);
       const coverPath = fileToUrl(fetchedCover);
       if (coverPath && fetchedCover.type === 'file') {
         const transformedUrl = `${rootAlias}/${transformImagePathForCover(coverPath)}`;
@@ -257,7 +253,7 @@ export class NotionPageRenderer {
     }
 
     if (transformCoverImage) {
-      icon = icon ? await this.#fetchAsset(icon) : icon;
+      icon = icon ? await this.#fetchImageAsset(icon) : icon;
       properties = await this.#getPagePropertiesWithFetchedAssets();
     }
 
@@ -285,7 +281,7 @@ export class NotionPageRenderer {
 
       properties[propertyName] = {
         ...property,
-        files: await Promise.all(property.files.map(async (file) => this.#fetchAsset(file))),
+        files: await Promise.all(property.files.map(async (file) => this.#fetchPublicAsset(file))),
       };
     }
 
@@ -303,7 +299,9 @@ export class NotionPageRenderer {
     this.#logger.debug('Rendering page');
 
     try {
-      const blocks = await awaitAll(listBlocks(this.client, this.page.id, this.#fetchAsset));
+      const blocks = await awaitAll(
+        listBlocks(this.client, this.page.id, this.#fetchImageAsset, this.#fetchPublicAsset)
+      );
 
       if (this.#assetAnalytics.download > 0 || this.#assetAnalytics.cached > 0) {
         this.#logger.info(
@@ -330,23 +328,34 @@ export class NotionPageRenderer {
     }
   }
 
-  #fetchAsset = async <T extends AssetObject>(assetObject: T): Promise<T> => {
+  #fetchImageAsset = <T extends AssetObject>(assetObject: T): Promise<T> => this.#fetchAsset(assetObject, false);
+
+  #fetchPublicAsset = <T extends AssetObject>(assetObject: T): Promise<T> => this.#fetchAsset(assetObject, true);
+
+  #fetchAsset = async <T extends AssetObject>(assetObject: T, serveFromPublic: boolean): Promise<T> => {
     try {
       if (assetObject.type !== 'file') {
         return assetObject;
       }
 
-      fse.ensureDirSync(this.imageSavePath);
-      const assetUrl = await saveImageFromAWS(assetObject.file.url, this.imageSavePath, {
+      const publicAssetPath = serveFromPublic ? this.publicAssetPath : undefined;
+      const assetSavePath = publicAssetPath ?? this.imageSavePath;
+      fse.ensureDirSync(assetSavePath);
+      const savedAssetPath = await saveImageFromAWS(assetObject.file.url, assetSavePath, {
         log: (message) => {
           this.#logger.debug(message);
         },
+        relativeTo: publicAssetPath,
         tag: (type) => {
           this.#assetAnalytics[type]++;
         },
       });
 
-      this.#assetPaths.push(assetUrl);
+      const assetUrl = publicAssetPath
+        ? path.posix.join(this.publicAssetUrlPath, savedAssetPath.split(path.sep).join('/'))
+        : savedAssetPath;
+      if (!publicAssetPath) this.#assetPaths.push(assetUrl);
+
       return {
         ...assetObject,
         file: {

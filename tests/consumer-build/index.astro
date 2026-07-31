@@ -1,0 +1,21 @@
+---
+/** Renders the packed loader's fixture entry through Astro's Content component. */
+import { getCollection, render } from 'astro:content';
+
+const [entry] = await getCollection('media');
+if (!entry) throw new Error('Consumer media fixture was not loaded');
+
+const { Content } = await render(entry);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Consumer media fixture</title>
+  </head>
+  <body>
+    <Content />
+  </body>
+</html>

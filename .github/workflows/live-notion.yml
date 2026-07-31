@@ -1,16 +1,15 @@
-name: CI
+name: Live Notion Verification
 
 on:
-  pull_request:
-  push:
-    branches:
-      - main
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  verify:
+  live-notion:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -29,17 +28,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Check formatting
-        run: pnpm exec prettier --check "src/**/*.{ts,js,json}"
-
-      - name: Type check
-        run: pnpm typecheck
-
-      - name: Test Astro compatibility
-        run: pnpm test:compat
-
-      - name: Run runtime tests
-        run: pnpm test
-
-      - name: Build package
-        run: pnpm build
+      - name: Compare live Notion rendering
+        run: pnpm test:live
+        env:
+          NOTION_TEST_TOKEN: ${{ secrets.NOTION_TEST_TOKEN }}
+          NOTION_TEST_DATA_SOURCE_ID: ${{ secrets.NOTION_TEST_DATA_SOURCE_ID }}

@@ -13,7 +13,11 @@ const stagedPaths = [
   'package.json',
   'tsconfig.json',
   'src',
-  'tests/astro-compatibility.test.ts',
+  'tests/fixtures',
+  'tests/format.test.ts',
+  'tests/loader.test.ts',
+  'tests/rehype-assets.test.ts',
+  'tests/schemas.test.ts',
   'tests/tsconfig.json',
   'tests/typecheck',
 ];
@@ -107,10 +111,18 @@ async function stageConsumer(consumerDirectory, tarballPath, astroVersion) {
     include: ['src/**/*.ts'],
   };
 
-  await mkdir(path.join(consumerDirectory, 'src'), { recursive: true });
+  await mkdir(path.join(consumerDirectory, 'src', 'pages'), { recursive: true });
   await cp(
-    path.join(repositoryRoot, 'tests/typecheck/astro-content-config.ts'),
+    path.join(repositoryRoot, 'tests/consumer-build/content.config.ts'),
     path.join(consumerDirectory, 'src/content.config.ts')
+  );
+  await cp(
+    path.join(repositoryRoot, 'tests/consumer-build/index.astro'),
+    path.join(consumerDirectory, 'src/pages/index.astro')
+  );
+  await cp(
+    path.join(repositoryRoot, 'tests/consumer-build/astro.config.mjs'),
+    path.join(consumerDirectory, 'astro.config.mjs')
   );
   await writeFile(path.join(consumerDirectory, 'package.json'), `${JSON.stringify(consumerPackageJson, null, 2)}\n`);
   await writeFile(path.join(consumerDirectory, 'tsconfig.json'), `${JSON.stringify(consumerTsconfig, null, 2)}\n`);
@@ -126,6 +138,42 @@ async function assertPackedLoader(consumerDirectory) {
   }
 
   console.log(`Verified packed ${loaderPackageJson.name}@${loaderPackageJson.version}`);
+}
+
+/** Verifies Astro emitted every hosted asset and replaced source paths with final public URLs. */
+async function assertConsumerBuild(consumerDirectory) {
+  const outputDirectory = path.join(consumerDirectory, 'dist');
+  const html = await readFile(path.join(outputDirectory, 'index.html'), 'utf8');
+  const expectedMedia = [
+    ['file-id.pdf', 'consumer-pdf'],
+    ['pdf-id.pdf', 'consumer-inline-pdf'],
+    ['video-id.mp4', 'consumer-video'],
+    ['audio-id.mp3', 'consumer-audio'],
+  ];
+
+  for (const [fileName, expectedContent] of expectedMedia) {
+    const outputPath = path.join(outputDirectory, 'notion-assets', 'parent-id', fileName);
+    const publicUrl = `/docs/notion-assets/parent-id/${fileName}`;
+
+    if (!html.includes(publicUrl)) {
+      throw new Error(`Consumer output does not reference ${publicUrl}`);
+    }
+    if ((await readFile(outputPath, 'utf8')) !== expectedContent) {
+      throw new Error(`Consumer output has unexpected content for ${publicUrl}`);
+    }
+  }
+
+  const imageSource = html.match(/<img[^>]+src="([^"]+)"/)?.[1];
+  if (!imageSource?.startsWith('/docs/_astro/')) {
+    throw new Error(`Expected an Astro image URL, but found ${imageSource ?? 'no image source'}`);
+  }
+  await readFile(path.join(outputDirectory, imageSource.replace('/docs/', '/')));
+
+  if (html.includes('prod-files-secure') || html.includes('../../assets/')) {
+    throw new Error('Consumer output contains an unresolved hosted asset URL');
+  }
+
+  console.log('Verified consumer build media output');
 }
 
 /** Stages and verifies one supported Astro version. */
@@ -149,7 +197,19 @@ async function main() {
     await assertAstroVersion(packageDirectory, expectedMajor, astroVersion, 'source package');
     run('pnpm', ['build'], packageDirectory);
     run('pnpm', ['typecheck'], packageDirectory);
-    run('pnpm', ['exec', 'vitest', 'run', 'tests/astro-compatibility.test.ts'], packageDirectory);
+    run(
+      'pnpm',
+      [
+        'exec',
+        'vitest',
+        'run',
+        'tests/format.test.ts',
+        'tests/loader.test.ts',
+        'tests/rehype-assets.test.ts',
+        'tests/schemas.test.ts',
+      ],
+      packageDirectory
+    );
 
     const tarballPath = packPackage(packageDirectory, temporaryDirectory);
     await stageConsumer(consumerDirectory, tarballPath, astroVersion);
@@ -170,6 +230,8 @@ async function main() {
       ],
       consumerDirectory
     );
+    run('pnpm', ['exec', 'astro', 'build'], consumerDirectory);
+    await assertConsumerBuild(consumerDirectory);
   } finally {
     await rm(temporaryDirectory, { recursive: true, force: true });
   }

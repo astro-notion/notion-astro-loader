@@ -30,6 +30,24 @@ pnpm build
 
 Contributors must not edit the package version or create release tags. Merging a pull request or pushing a branch never publishes to npm; only maintainers perform releases.
 
+## Live Notion Verification
+
+The live golden-page test is isolated from pull-request CI. Only `.github/workflows/live-notion.yml` invokes it, on a weekly schedule or through a manual workflow dispatch. Normal contributor verification requires no Notion credentials.
+
+Maintain a dedicated Notion integration with access only to the test data source. Store its credentials as the repository Actions secrets `NOTION_TEST_TOKEN` and `NOTION_TEST_DATA_SOURCE_ID`; never put their values in commands, issue comments, snapshots, or repository files.
+
+The fixture contract is:
+
+- Its title property is named `Title` and has the value `Renderer Test`.
+- Its content includes the marker `astro-notion-loader-smoke`.
+- It permanently contains Notion-hosted image, file, video, and audio blocks.
+
+Run `pnpm test:live` only after configuring both variables in the process environment. The test renders the complete page, verifies that each hosted asset was downloaded, normalizes signed URLs, temporary paths, timestamps, and path separators, then compares the result with `tests/live/renderer-test.snapshot.html`.
+
+To establish or intentionally update the baseline, run `pnpm test:live --update` and review the complete snapshot before committing it. Confirm the structure is expected and reject the update if it contains a raw Notion token, signed query parameters, an absolute temporary path, an unnormalized timestamp, or any other sensitive value. Never accept snapshot updates automatically after upstream changes.
+
+For local visual inspection, run `pnpm test:live:preview`. It performs the same live assertions and snapshot comparison, then writes browser-readable output to `tests/live/output/index.html` with downloaded files beneath `tests/live/output/assets/`. This directory is gitignored and is not uploaded by GitHub Actions.
+
 ## Trusted Publisher Setup
 
 Before the first tag-triggered release, configure the npm trusted publisher for `@astro-notion/loader` with these exact values:

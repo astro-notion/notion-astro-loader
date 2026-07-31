@@ -4,6 +4,7 @@ import type { Loader } from 'astro/loaders';
 import { Client, isFullPage, iteratePaginatedAPI } from '@notionhq/client';
 import { dim } from 'kleur/colors';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { propertiesSchemaForDatasourceProperties } from './datasource-properties.js';
 import { VIRTUAL_CONTENT_ROOT } from './image.js';
@@ -30,8 +31,8 @@ export interface NotionLoaderOptions
    */
   collectionName?: string;
   /**
-   * The path to save the images.
-   * Defaults to 'public'.
+   * The project-relative public directory where non-image assets are saved.
+   * The directory must be inside Astro's configured `publicDir`. Defaults to `publicDir`.
    */
   publicPath?: string;
   /**
@@ -94,6 +95,7 @@ export function notionLoader({
   in_trash,
   archived,
   collectionName,
+  publicPath,
   imageSavePath = DEFAULT_IMAGE_SAVE_PATH,
   rehypePlugins = [],
   experimentalCacheImageInData = false,
@@ -141,7 +143,7 @@ export function notionLoader({
       };
     },
     async load(ctx) {
-      const { store, logger: log_db, parseData } = ctx;
+      const { config, store, logger: log_db, parseData } = ctx;
 
       const existingPageIds = new Set<string>(store.keys());
       const renderPromises: Promise<void>[] = [];
@@ -164,8 +166,25 @@ export function notionLoader({
         const existingPage = store.get(page.id);
 
         if (existingPage?.digest !== page.last_edited_time || process.env.FORCE_RERENDER) {
-          const realSavePath = path.resolve(process.cwd(), 'src', imageSavePath);
-          const renderer = new NotionPageRenderer(notionClient, page, realSavePath, log_pg);
+          const projectRoot = config ? fileURLToPath(config.root) : process.cwd();
+          const realSavePath = path.resolve(projectRoot, 'src', imageSavePath);
+          const publicRoot = config ? fileURLToPath(config.publicDir) : path.resolve(projectRoot, 'public');
+          const realPublicPath = publicPath ? path.resolve(projectRoot, publicPath) : publicRoot;
+          const relativePublicPath = path.relative(publicRoot, realPublicPath);
+          const isOutsidePublic = relativePublicPath === '..' || relativePublicPath.startsWith(`..${path.sep}`);
+          if (isOutsidePublic || path.isAbsolute(relativePublicPath)) {
+            throw new Error(`publicPath must resolve inside ${publicRoot}`);
+          }
+
+          const publicAssetUrlPath = path.posix.join(config?.base ?? '/', relativePublicPath.split(path.sep).join('/'));
+          const renderer = new NotionPageRenderer(
+            notionClient,
+            page,
+            realSavePath,
+            log_pg,
+            realPublicPath,
+            publicAssetUrlPath
+          );
           const pageData = await renderer.getPageData(experimentalCacheImageInData, experimentalRootSourceAlias);
           const data = await parseData(pageData);
 

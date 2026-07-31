@@ -6,6 +6,7 @@ import { dim } from 'kleur/colors';
 export interface SaveOptions {
   ignoreCache?: boolean;
   log?: (message: string) => void;
+  relativeTo?: string;
   tag?: (type: 'download' | 'cached') => void;
 }
 
@@ -19,6 +20,7 @@ export const VIRTUAL_CONTENT_ROOT = 'src/content/notion';
  * @param options Optional configuration for saving the image.
  * @param options.ignoreCache Whether to ignore cached images and download again. Defaults to false.
  * @param options.log Optional logging function to record the operation.
+ * @param options.relativeTo Base directory for the returned relative path.
  * @param options.tag Optional tagging function to mark the operation as 'download' or 'cached'.
  *
  * @returns The relative path of the saved image from the project's virtual content root.
@@ -38,7 +40,7 @@ export const VIRTUAL_CONTENT_ROOT = 'src/content/notion';
  * ./src/{dir}/ed3b245b-dd96-4e0d-a399-9a99a0cf37c0/d16195b7-f998-8d2e-38b9c47be295.png
  */
 export async function saveImageFromAWS(url: string, dir: string, options: SaveOptions = {}) {
-  const { ignoreCache, log, tag } = options;
+  const { ignoreCache, log, relativeTo, tag } = options;
 
   if (!fse.existsSync(dir)) {
     throw new Error(`Directory ${dir} does not exist`);
@@ -58,8 +60,12 @@ export async function saveImageFromAWS(url: string, dir: string, options: SaveOp
 
   if (ignoreCache || !fse.existsSync(filePath)) {
     const response = await fetch(url);
+    if (!response.ok) {
+      const status = [response.status, response.statusText].filter(Boolean).join(' ');
+      throw new Error(`Failed to download image: HTTP ${status}`);
+    }
     const buffer = await response.arrayBuffer();
-    fse.writeFile(filePath, new Uint8Array(buffer));
+    await fse.writeFile(filePath, new Uint8Array(buffer));
 
     log?.(`Saved image \`${fileName}\` ${dim(`created \`${filePath}\``)}`);
     tag?.('download');
@@ -68,7 +74,7 @@ export async function saveImageFromAWS(url: string, dir: string, options: SaveOp
     tag?.('cached');
   }
 
-  const relBasePath = path.resolve(process.cwd(), VIRTUAL_CONTENT_ROOT);
+  const relBasePath = relativeTo ?? path.resolve(process.cwd(), VIRTUAL_CONTENT_ROOT);
   return path.relative(relBasePath, filePath);
 }
 

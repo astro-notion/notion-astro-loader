@@ -1,6 +1,8 @@
 # build output
 dist/
 .output/
+coverage/
+tests/live/output/
 
 # dependencies
 node_modules/

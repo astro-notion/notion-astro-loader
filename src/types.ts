@@ -30,6 +30,7 @@ export type FileBlock = Extract<Block, { type: 'file' }>;
 export type ImageBlock = Extract<Block, { type: 'image' }>;
 export type VideoBlock = Extract<Block, { type: 'video' }>;
 export type AudioBlock = Extract<Block, { type: 'audio' }>;
+export type PdfBlock = Extract<Block, { type: 'pdf' }>;
 export type CalloutBlock = Extract<Block, { type: 'callout' }>;
 export type FilesProperty = Extract<PageProperty, { type: 'files' }>;
 
@@ -38,6 +39,7 @@ export type AssetObject =
   | ImageBlock['image']
   | VideoBlock['video']
   | AudioBlock['audio']
+  | PdfBlock['pdf']
   | NonNullable<CalloutBlock['callout']['icon']>
   | NonNullable<PageObjectResponse['cover']>
   | NonNullable<PageObjectResponse['icon']>
