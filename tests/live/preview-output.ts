@@ -13,6 +13,19 @@ export interface LivePreviewResult {
   assetCount: number;
 }
 
+/** Maps one downloaded public asset to its rendered URL. */
+export interface LivePreviewPublicAsset {
+  sourcePath: string;
+  renderedPath: string;
+}
+
+/** Public asset configuration used to build a browser-readable preview. */
+export interface LivePreviewPublicAssets {
+  publicAssetPath: string;
+  publicAssetUrlPath: string;
+  publicAssets: LivePreviewPublicAsset[];
+}
+
 /** Decodes the HTML entities used inside serialized Astro image metadata. */
 function decodeHtmlAttribute(value: string): string {
   return value
@@ -65,6 +78,18 @@ ${renderedHtml}
 `;
 }
 
+/** Returns an asset path relative to its configured root without permitting traversal. */
+function getRelativeAssetPath(sourcePath: string, rootPath: string, rootName: string): string {
+  const relativePath = path.relative(rootPath, sourcePath);
+  const escapesRoot = relativePath === '' || relativePath === '..' || relativePath.startsWith(`..${path.sep}`);
+
+  if (escapesRoot || path.isAbsolute(relativePath)) {
+    throw new Error(`Downloaded preview asset is outside the ${rootName}`);
+  }
+
+  return relativePath;
+}
+
 /**
  * Copies downloaded assets and writes standalone browser-readable live HTML.
  */
@@ -72,22 +97,39 @@ export async function writeLivePreview(
   renderedHtml: string,
   renderedAssetPaths: string[],
   imageSavePath: string,
-  outputDirectory: string
+  outputDirectory: string,
+  publicAssetConfig: LivePreviewPublicAssets
 ): Promise<LivePreviewResult> {
   const virtualContentPath = path.resolve(process.cwd(), VIRTUAL_CONTENT_ROOT);
   const assetMappings = new Map<string, { sourcePath: string; previewPath: string; relativePath: string }>();
 
   for (const renderedAssetPath of renderedAssetPaths) {
     const sourcePath = path.resolve(virtualContentPath, renderedAssetPath);
-    const relativePath = path.relative(imageSavePath, sourcePath);
-    const escapesImageDirectory =
-      relativePath === '' || relativePath === '..' || relativePath.startsWith(`..${path.sep}`);
-    if (escapesImageDirectory || path.isAbsolute(relativePath)) {
-      throw new Error('Downloaded preview asset is outside the image directory');
-    }
+    const relativePath = getRelativeAssetPath(sourcePath, imageSavePath, 'image directory');
 
     const portableRelativePath = relativePath.split(path.sep).join('/');
     assetMappings.set(renderedAssetPath, {
+      sourcePath,
+      relativePath,
+      previewPath: `./assets/${portableRelativePath}`,
+    });
+  }
+
+  const normalizedPublicUrlPath = path.posix.resolve('/', publicAssetConfig.publicAssetUrlPath);
+  for (const publicAsset of publicAssetConfig.publicAssets) {
+    const sourcePath = path.resolve(publicAsset.sourcePath);
+    const relativePath = getRelativeAssetPath(sourcePath, publicAssetConfig.publicAssetPath, 'public asset directory');
+    const normalizedRenderedPath = path.posix.resolve('/', publicAsset.renderedPath);
+    const relativeUrlPath = path.posix.relative(normalizedPublicUrlPath, normalizedRenderedPath);
+    const escapesPublicUrlPath =
+      relativeUrlPath === '' || relativeUrlPath === '..' || relativeUrlPath.startsWith('../');
+
+    if (escapesPublicUrlPath || path.posix.isAbsolute(relativeUrlPath)) {
+      throw new Error('Rendered preview asset is outside the public asset URL path');
+    }
+
+    const portableRelativePath = relativePath.split(path.sep).join('/');
+    assetMappings.set(publicAsset.renderedPath, {
       sourcePath,
       relativePath,
       previewPath: `./assets/${portableRelativePath}`,

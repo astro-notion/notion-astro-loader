@@ -11,21 +11,15 @@ import { Client, isFullBlock, isFullPage, iteratePaginatedAPI, type PageObjectRe
 import { expect, it, vi } from 'vitest';
 
 import { buildProcessor, NotionPageRenderer } from '../../src/render.js';
-import { VIRTUAL_CONTENT_ROOT } from '../../src/asset.js';
+import { getHostedAssetExpectation, type HostedAsset } from './asset-contract.js';
 import { getLiveTestConfig } from './config.js';
 import { normalizeLiveSnapshot } from './normalize.js';
-import { writeLivePreview } from './preview-output.js';
+import { writeLivePreview, type LivePreviewPublicAsset } from './preview-output.js';
 
 const FIXTURE_TITLE = 'Renderer Test';
 const FIXTURE_MARKER = 'astro-notion-loader-smoke';
+const PUBLIC_ASSET_URL_PATH = '/notion-assets';
 const REQUIRED_HOSTED_BLOCK_TYPES = ['audio', 'file', 'image', 'video'] as const;
-
-/** Identifies one hosted block asset without exposing its URL in diagnostics. */
-interface HostedAsset {
-  blockId: string;
-  blockType: string;
-  url: string;
-}
 
 /** Creates a quiet Astro logger for live rendering. */
 function createLogger() {
@@ -108,28 +102,25 @@ async function getBlockDiagnostics(
   };
 }
 
-/** Resolves the local path produced for a hosted Notion asset URL. */
-function getDownloadedAssetPath(asset: HostedAsset, imageSavePath: string): string {
-  const [parentId, objectId, fileName] = new URL(asset.url).pathname.split('/').filter(Boolean);
-  const extension = fileName?.split('.').at(-1);
-
-  if (!parentId || !objectId || !extension) {
-    throw new Error(`Hosted ${asset.blockType} block ${asset.blockId} has an invalid asset path`);
-  }
-
-  return path.resolve(imageSavePath, parentId, `${objectId}.${extension}`);
-}
-
 it('selects and renders the dedicated Notion fixture page', async () => {
   const { token, dataSourceId } = getLiveTestConfig();
   const client = new Client({ auth: token });
-  const imageSavePath = await mkdtemp(path.join(tmpdir(), 'notion-live-'));
+  const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'notion-live-'));
+  const imageSavePath = path.join(temporaryRoot, 'source-images');
+  const publicAssetPath = path.join(temporaryRoot, 'public-assets');
 
   try {
     const page = await getRendererTestPage(client, dataSourceId);
     const diagnostics = await getBlockDiagnostics(client, page.id);
     const logger = createLogger();
-    const renderer = new NotionPageRenderer(client, page, imageSavePath, logger as never);
+    const renderer = new NotionPageRenderer(
+      client,
+      page,
+      imageSavePath,
+      logger as never,
+      publicAssetPath,
+      PUBLIC_ASSET_URL_PATH
+    );
     const rendered = await renderer.render(buildProcessor(Promise.resolve([])));
 
     if (!rendered) {
@@ -149,37 +140,53 @@ it('selects and renders the dedicated Notion fixture page', async () => {
       expect(hostedBlockTypes.has(requiredBlockType), `Missing hosted ${requiredBlockType} fixture block`).toBe(true);
     }
 
+    const previewPublicAssets: LivePreviewPublicAsset[] = [];
     for (const asset of diagnostics.hostedAssets) {
-      const downloadedPath = getDownloadedAssetPath(asset, imageSavePath);
-      const renderedPath = path.relative(path.resolve(process.cwd(), VIRTUAL_CONTENT_ROOT), downloadedPath);
+      const expectation = getHostedAssetExpectation(asset, imageSavePath, publicAssetPath, PUBLIC_ASSET_URL_PATH);
 
       await expect(
-        access(downloadedPath),
+        access(expectation.downloadedPath),
         `${asset.blockType} block ${asset.blockId} was not downloaded`
       ).resolves.toBeUndefined();
-      expect(
-        rendered.metadata.imagePaths,
-        `${asset.blockType} block ${asset.blockId} is missing from metadata`
-      ).toContain(renderedPath);
+
+      if (expectation.destination === 'source') {
+        expect(
+          rendered.metadata.imagePaths,
+          `${asset.blockType} block ${asset.blockId} is missing from image metadata`
+        ).toContain(expectation.renderedPath);
+      } else {
+        expect(
+          rendered.metadata.imagePaths,
+          `${asset.blockType} block ${asset.blockId} must not appear in image metadata`
+        ).not.toContain(expectation.renderedPath);
+        previewPublicAssets.push({
+          sourcePath: expectation.downloadedPath,
+          renderedPath: expectation.renderedPath,
+        });
+      }
+
       expect(rendered.html, `${asset.blockType} block ${asset.blockId} is missing from rendered HTML`).toContain(
-        renderedPath
+        expectation.renderedPath
       );
     }
 
     const previewDirectory = process.env.NOTION_LIVE_PREVIEW_DIR;
     if (previewDirectory) {
-      await writeLivePreview(rendered.html, rendered.metadata.imagePaths, imageSavePath, previewDirectory);
+      await writeLivePreview(rendered.html, rendered.metadata.imagePaths, imageSavePath, previewDirectory, {
+        publicAssetPath,
+        publicAssetUrlPath: PUBLIC_ASSET_URL_PATH,
+        publicAssets: previewPublicAssets,
+      });
     }
 
-    const relativeTemporaryPath = path.relative(path.resolve(process.cwd(), VIRTUAL_CONTENT_ROOT), imageSavePath);
     const normalizedHtml = normalizeLiveSnapshot(rendered!.html, {
-      temporaryPaths: [imageSavePath, relativeTemporaryPath],
+      temporaryPaths: [temporaryRoot],
       forbiddenValues: [token, dataSourceId],
     });
     const snapshotPath = fileURLToPath(new URL('./renderer-test.snapshot.html', import.meta.url));
 
     await expect(normalizedHtml).toMatchFileSnapshot(snapshotPath);
   } finally {
-    await rm(imageSavePath, { recursive: true, force: true });
+    await rm(temporaryRoot, { recursive: true, force: true });
   }
 }, 120_000);
