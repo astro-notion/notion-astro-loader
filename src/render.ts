@@ -44,25 +44,21 @@ const baseProcessor = unified()
   .use(rehypeKatex) // Then you can use any rehype plugins to enrich the AST
   .use(rehypeStringify); // Turn AST to HTML string
 
+/** Creates a Notion processor whose mutable rendering metadata is scoped to each invocation. */
 export function buildProcessor(rehypePlugins: Promise<ReadonlyArray<readonly [RehypePlugin, any]>>) {
-  let headings: MarkdownHeading[] = [];
-
-  const processorWithToc = baseProcessor().use(rehypeToc, {
-    customizeTOC(toc) {
-      headings = extractTocHeadings(toc);
-      return false;
-    },
-  });
-  const processorPromise = rehypePlugins.then((plugins) => {
-    let processor = processorWithToc;
+  return async function process(blocks: unknown[], imagePaths: string[]) {
+    const plugins = await rehypePlugins;
+    let headings: MarkdownHeading[] = [];
+    let processor = baseProcessor().use(rehypeToc, {
+      customizeTOC(toc) {
+        headings = extractTocHeadings(toc);
+        return false;
+      },
+    });
     for (const [plugin, options] of plugins) {
       processor = processor.use(plugin, options);
     }
-    return processor;
-  });
-
-  return async function process(blocks: unknown[], imagePaths: string[]) {
-    const processor = await processorPromise.then((p) => p().use(rehypeImages(), { imagePaths }));
+    processor = processor.use(rehypeImages(), { imagePaths });
     const vFile = (await processor.process({ data: blocks } as Record<string, unknown>)) as VFile;
     return { vFile, headings };
   };
