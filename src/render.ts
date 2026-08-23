@@ -291,9 +291,9 @@ export class NotionPageRenderer {
    *
    * @param process Processor function to transform Notion blocks into HTML.
    * This is created once for all pages then shared.
-   * @returns Rendered HTML and metadata, or undefined if rendering failed.
+   * @returns Rendered HTML and metadata.
    */
-  async render(process: ReturnType<typeof buildProcessor>): Promise<RenderedNotionEntry | undefined> {
+  async render(process: ReturnType<typeof buildProcessor>): Promise<RenderedNotionEntry> {
     this.#logger.debug('Rendering page');
 
     try {
@@ -322,7 +322,7 @@ export class NotionPageRenderer {
       };
     } catch (error) {
       this.#logger.error(`Failed to render: ${getErrorMessage(error)}`);
-      return undefined;
+      throw error;
     }
   }
 
