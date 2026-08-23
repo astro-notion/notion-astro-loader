@@ -61,6 +61,35 @@ describe('normalizeLiveSnapshot', () => {
     expect(normalized).not.toContain('\r');
   });
 
+  it('normalizes overlapping absolute and relative temporary roots without partial replacements', () => {
+    const absoluteTemporaryRoot = '/private/var/folders/notion-live';
+    const relativeTemporaryRoot = `../../../../..${absoluteTemporaryRoot}`;
+    const html = `<img src="${relativeTemporaryRoot}/asset.png">`;
+
+    const normalized = normalizeLiveSnapshot(html, {
+      temporaryPaths: [absoluteTemporaryRoot, relativeTemporaryRoot],
+    });
+
+    expect(normalized).toBe('<img src="[TEMP_ROOT]/asset.png">\n');
+    expect(normalized).not.toMatch(/\.\.\/\[TEMP_ROOT\]/);
+  });
+
+  it('normalizes temporary roots independently of input order and workspace depth', () => {
+    const absoluteTemporaryRoot = '/private/var/folders/notion-live';
+    const relativeTemporaryRoots = [`../../..${absoluteTemporaryRoot}`, `../../../../../../..${absoluteTemporaryRoot}`];
+
+    for (const relativeTemporaryRoot of relativeTemporaryRoots) {
+      const html = `<img src="${relativeTemporaryRoot}/asset.png">`;
+      const paths = [absoluteTemporaryRoot, absoluteTemporaryRoot, relativeTemporaryRoot];
+      const forward = normalizeLiveSnapshot(html, { temporaryPaths: paths });
+      const reversed = normalizeLiveSnapshot(html, { temporaryPaths: [...paths].reverse() });
+
+      expect(forward).toBe('<img src="[TEMP_ROOT]/asset.png">\n');
+      expect(reversed).toBe(forward);
+      expect(forward).not.toMatch(/\.\.\/\[TEMP_ROOT\]/);
+    }
+  });
+
   it('rejects forbidden values without including them in the error', () => {
     const secret = 'secret-notion-token';
 

@@ -27,8 +27,10 @@ export function normalizeLiveSnapshot(html: string, options: NormalizeLiveSnapsh
   }
 
   let normalized = html.replaceAll('\\', '/').replaceAll('\r\n', '\n');
-  for (const temporaryPath of options.temporaryPaths ?? []) {
-    const portablePath = temporaryPath.replaceAll('\\', '/');
+  const temporaryPaths = [...new Set((options.temporaryPaths ?? []).map((value) => value.replaceAll('\\', '/')))];
+  temporaryPaths.sort((left, right) => right.length - left.length);
+
+  for (const portablePath of temporaryPaths) {
     normalized = normalized.replace(new RegExp(escapeRegularExpression(portablePath), 'g'), '[TEMP_ROOT]');
   }
 

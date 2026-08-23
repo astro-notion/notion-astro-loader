@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { Client, isFullBlock, isFullPage, iteratePaginatedAPI, type PageObjectResponse } from '@notionhq/client';
 import { expect, it, vi } from 'vitest';
 
+import { VIRTUAL_CONTENT_ROOT } from '../../src/asset.js';
 import { buildProcessor, NotionPageRenderer } from '../../src/render.js';
 import { getHostedAssetExpectation, type HostedAsset } from './asset-contract.js';
 import { getLiveTestConfig } from './config.js';
@@ -179,8 +180,9 @@ it('selects and renders the dedicated Notion fixture page', async () => {
       });
     }
 
+    const relativeTemporaryRoot = path.relative(path.resolve(process.cwd(), VIRTUAL_CONTENT_ROOT), temporaryRoot);
     const normalizedHtml = normalizeLiveSnapshot(rendered!.html, {
-      temporaryPaths: [temporaryRoot],
+      temporaryPaths: [temporaryRoot, relativeTemporaryRoot],
       forbiddenValues: [token, dataSourceId],
     });
     const snapshotPath = fileURLToPath(new URL('./renderer-test.snapshot.html', import.meta.url));
