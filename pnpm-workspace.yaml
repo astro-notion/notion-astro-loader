@@ -1,3 +1,8 @@
 allowBuilds:
   esbuild: false
   sharp: false
+
+overrides:
+  'js-yaml@': 4.3.1
+  'nanoid@': 3.3.18
+  'postcss@': 8.5.26

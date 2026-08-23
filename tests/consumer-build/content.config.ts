@@ -4,7 +4,7 @@
 
 import { defineCollection } from 'astro:content';
 
-import { notionLoader } from '@astro-notion/loader';
+import { notionLoader, type ClientOptions } from '@astro-notion/loader';
 
 const DATA_SOURCE_ID = 'data-source-id';
 const PAGE_ID = 'page-id';
@@ -156,7 +156,7 @@ const media = defineCollection({
   loader: notionLoader({
     auth: 'consumer-token',
     data_source_id: DATA_SOURCE_ID,
-    fetch: fixtureFetch,
+    fetch: fixtureFetch as NonNullable<ClientOptions['fetch']>,
     publicPath: 'public/notion-assets',
   }),
 });
