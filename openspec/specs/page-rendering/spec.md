@@ -39,7 +39,7 @@ The renderer SHALL use a unified/rehype pipeline to convert Notion blocks to HTM
 
 ### Requirement: Table of Contents Extraction
 
-The renderer SHALL extract heading information for table of contents generation.
+The renderer SHALL extract heading information for table of contents generation and SHALL isolate that information to the content being processed by each render invocation.
 
 #### Scenario: Extract headings
 - **WHEN** content is processed
@@ -49,6 +49,11 @@ The renderer SHALL extract heading information for table of contents generation.
 #### Scenario: Nested headings
 - **WHEN** the content has nested headings (h2 inside h1 context)
 - **THEN** the depth reflects the nesting level starting from 0
+
+#### Scenario: Isolate headings during overlapping renders
+- **WHEN** multiple pages are processed concurrently and a custom rehype plugin performs asynchronous work
+- **THEN** each rendered result contains only the headings extracted from its own page
+- **AND** no rendered result contains heading metadata from another page
 
 ### Requirement: Rendered Output Structure
 
@@ -134,3 +139,4 @@ The renderer SHALL keep directly served public assets out of Astro image import 
 - **WHEN** a page contains a hosted image and hosted non-image media
 - **THEN** `metadata.imagePaths` contains the source image path
 - **AND** does not contain public document or media paths
+

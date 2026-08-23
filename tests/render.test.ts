@@ -42,7 +42,7 @@ vi.mock('../src/asset.js', async (importOriginal) => {
   return { ...original, saveNotionAsset: assetApi.saveNotionAsset };
 });
 
-import { buildProcessor, NotionPageRenderer } from '../src/render.js';
+import { buildProcessor, NotionPageRenderer, type RehypePlugin } from '../src/render.js';
 
 let imageSavePath: string;
 let publicAssetPath: string;
@@ -72,6 +72,57 @@ afterEach(async () => {
   await rm(imageSavePath, { recursive: true, force: true });
 });
 
+describe('buildProcessor', () => {
+  it('isolates headings when asynchronous plugin processing overlaps', async () => {
+    let pluginInvocation = 0;
+    let releaseFirstPlugin!: () => void;
+    let notifyFirstPluginStarted!: () => void;
+    const firstPluginStarted = new Promise<void>((resolve) => {
+      notifyFirstPluginStarted = resolve;
+    });
+    const firstPluginRelease = new Promise<void>((resolve) => {
+      releaseFirstPlugin = resolve;
+    });
+    const overlappingPlugin: RehypePlugin = () => async () => {
+      pluginInvocation += 1;
+      if (pluginInvocation === 1) {
+        notifyFirstPluginStarted();
+        await firstPluginRelease;
+      }
+    };
+    const process = buildProcessor(Promise.resolve([[overlappingPlugin, undefined]]));
+    const firstBlocks = [
+      {
+        object: 'block',
+        id: 'first-heading',
+        type: 'heading_1',
+        has_children: false,
+        heading_1: { rich_text: [createRichText('First page')], is_toggleable: false, color: 'default' },
+      },
+    ];
+    const secondBlocks = [
+      {
+        object: 'block',
+        id: 'second-heading',
+        type: 'heading_1',
+        has_children: false,
+        heading_1: { rich_text: [createRichText('Second page')], is_toggleable: false, color: 'default' },
+      },
+    ];
+
+    const firstRender = process(firstBlocks, []);
+    await firstPluginStarted;
+    const secondRender = await process(secondBlocks, []);
+    releaseFirstPlugin();
+    const firstRenderResult = await firstRender;
+
+    expect(String(firstRenderResult.vFile)).toContain('<h1 id="first-page">First page</h1>');
+    expect(firstRenderResult.headings).toEqual([{ depth: 0, text: 'First page', slug: 'first-page' }]);
+    expect(String(secondRender.vFile)).toContain('<h1 id="second-page">Second page</h1>');
+    expect(secondRender.headings).toEqual([{ depth: 0, text: 'Second page', slug: 'second-page' }]);
+  });
+});
+
 describe('NotionPageRenderer.render', () => {
   it('renders recursive blocks, semantic headings, and local image metadata through the real processor', async () => {
     const page = createPage();
@@ -84,7 +135,10 @@ describe('NotionPageRenderer.render', () => {
     const videoPath = 'parent/video.mp4';
     const externalImageUrl = 'https://images.example.com/external.png';
     const externalAudioUrl = 'https://media.example.com/external.mp3';
-    assetApi.saveNotionAsset.mockResolvedValueOnce(imagePath).mockResolvedValueOnce(pdfPath).mockResolvedValueOnce(videoPath);
+    assetApi.saveNotionAsset
+      .mockResolvedValueOnce(imagePath)
+      .mockResolvedValueOnce(pdfPath)
+      .mockResolvedValueOnce(videoPath);
 
     notionBlocks.byParent.set(page.id, [
       {
