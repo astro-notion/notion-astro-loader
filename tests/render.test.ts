@@ -124,6 +124,19 @@ describe('buildProcessor', () => {
 });
 
 describe('NotionPageRenderer.render', () => {
+  it('logs rendering context and rejects with the original processing error', async () => {
+    const page = createPage();
+    const logger = createLogger();
+    const processingError = new Error('Processing failed');
+    const process = vi.fn().mockRejectedValue(processingError);
+    const client = { blocks: { children: { list: vi.fn() } } };
+    const renderer = new NotionPageRenderer(client as never, page as never, imageSavePath, logger as never);
+
+    await expect(renderer.render(process)).rejects.toBe(processingError);
+
+    expect(logger.error).toHaveBeenCalledWith('Failed to render: Processing failed');
+  });
+
   it('renders recursive blocks, semantic headings, and local image metadata through the real processor', async () => {
     const page = createPage();
     const hostedImageUrl =
@@ -235,18 +248,18 @@ describe('NotionPageRenderer.render', () => {
 
     const rendered = await renderer.render(buildProcessor(Promise.resolve([])));
 
-    expect(rendered?.html).toContain('<h1 id="overview">Overview</h1>');
-    expect(rendered?.html).toContain('<details');
-    expect(rendered?.html).toContain('<summary>Details</summary>');
-    expect(rendered?.html).toContain('<p>Nested content</p>');
-    expect(rendered?.html).toContain('<li>List item</li>');
-    expect(rendered?.html).toContain('__ASTRO_IMAGE_');
-    expect(rendered?.html).toContain('href="/docs/notion-assets/parent/document.pdf"');
-    expect(rendered?.html).toContain('/docs/notion-assets/parent/video.mp4');
-    expect(rendered?.html).toContain(externalImageUrl);
-    expect(rendered?.html).toContain(externalAudioUrl);
-    expect(rendered?.metadata.headings).toEqual([{ depth: 0, text: 'Overview', slug: 'overview' }]);
-    expect(rendered?.metadata.imagePaths).toEqual([imagePath]);
+    expect(rendered.html).toContain('<h1 id="overview">Overview</h1>');
+    expect(rendered.html).toContain('<details');
+    expect(rendered.html).toContain('<summary>Details</summary>');
+    expect(rendered.html).toContain('<p>Nested content</p>');
+    expect(rendered.html).toContain('<li>List item</li>');
+    expect(rendered.html).toContain('__ASTRO_IMAGE_');
+    expect(rendered.html).toContain('href="/docs/notion-assets/parent/document.pdf"');
+    expect(rendered.html).toContain('/docs/notion-assets/parent/video.mp4');
+    expect(rendered.html).toContain(externalImageUrl);
+    expect(rendered.html).toContain(externalAudioUrl);
+    expect(rendered.metadata.headings).toEqual([{ depth: 0, text: 'Overview', slug: 'overview' }]);
+    expect(rendered.metadata.imagePaths).toEqual([imagePath]);
     expect(assetApi.saveNotionAsset).toHaveBeenNthCalledWith(1, hostedImageUrl, imageSavePath, expect.any(Object));
     expect(assetApi.saveNotionAsset).toHaveBeenNthCalledWith(2, hostedPdfUrl, publicAssetPath, expect.any(Object));
     expect(assetApi.saveNotionAsset).toHaveBeenCalledTimes(3);

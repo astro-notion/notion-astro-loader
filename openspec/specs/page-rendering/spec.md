@@ -57,7 +57,7 @@ The renderer SHALL extract heading information for table of contents generation 
 
 ### Requirement: Rendered Output Structure
 
-The renderer SHALL return structured HTML and metadata while retaining image-specific metadata for Astro processing.
+The renderer SHALL return structured HTML and metadata while retaining image-specific metadata for Astro processing, and SHALL reject when rendering cannot complete.
 
 #### Scenario: Successful render
 - **WHEN** rendering completes successfully
@@ -68,7 +68,8 @@ The renderer SHALL return structured HTML and metadata while retaining image-spe
 #### Scenario: Render failure
 - **WHEN** rendering fails with an error
 - **THEN** an operation-context error message is logged
-- **AND** `undefined` is returned
+- **AND** the render promise rejects with the original error
+- **AND** no rendered entry is returned
 
 ### Requirement: Page Data Extraction
 

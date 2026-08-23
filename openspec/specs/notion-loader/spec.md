@@ -3,9 +3,7 @@
 ## Purpose
 
 Provide a fully-featured Astro Content Layer loader that fetches pages from a Notion data source, dynamically generates Zod schemas from data source properties, renders page content to HTML, and supports incremental loading with caching.
-
 ## Requirements
-
 ### Requirement: Runtime Compatibility
 
 The package SHALL declare and verify the runtime versions required to use the loader with Astro 6.
@@ -78,7 +76,7 @@ The loader SHALL accept standard Notion data source query parameters for filteri
 
 ### Requirement: Incremental Loading
 
-The loader SHALL support incremental loading by tracking page modifications and only re-rendering changed pages.
+The loader SHALL support incremental loading by tracking page modifications, only re-rendering changed pages, and only committing a page after rendering succeeds.
 
 #### Scenario: Skip unchanged pages
 - **WHEN** a page exists in the store with the same `last_edited_time` as the API response
@@ -99,6 +97,20 @@ The loader SHALL support incremental loading by tracking page modifications and 
 - **WHEN** a page exists in the store but is not returned by the API
 - **THEN** the page is deleted from the store
 - **AND** an info message noting the deletion is logged
+
+#### Scenario: Preserve an existing entry when rendering its update fails
+- **WHEN** a page exists in the store with a different `last_edited_time` than the API response
+- **AND** rendering the updated page fails
+- **THEN** the load rejects with the rendering error
+- **AND** the existing store entry remains unchanged, including its prior digest, data, rendered content, and asset imports
+- **AND** the unchanged digest allows the page to be retried during the next load
+
+#### Scenario: Avoid creating an entry when its first render fails
+- **WHEN** a page from the API does not exist in the store
+- **AND** rendering the page fails
+- **THEN** the load rejects with the rendering error
+- **AND** no store entry or current digest is written for the page
+- **AND** the absent entry allows the page to be retried during the next load
 
 ### Requirement: Dynamic Schema Generation
 
@@ -155,3 +167,4 @@ The loader SHALL provide structured logging with per-page context and forked log
 - **WHEN** processing a page
 - **THEN** a forked logger with the page ID prefix is used
 - **AND** page title and last edited date are included in log messages
+

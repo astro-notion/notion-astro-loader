@@ -195,7 +195,7 @@ export function notionLoader({
               data,
               rendered,
               filePath: `${VIRTUAL_CONTENT_ROOT}/${page.id}.md`,
-              assetImports: rendered?.metadata.imagePaths,
+              assetImports: rendered.metadata.imagePaths,
             });
           });
 

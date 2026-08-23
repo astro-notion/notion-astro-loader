@@ -346,7 +346,17 @@ describe('notionLoader', () => {
     } as never);
     vi.spyOn(NotionPageRenderer.prototype, 'render').mockRejectedValue(new Error('Rendering failed'));
 
-    const existingEntry = { id: page.id, digest: 'previous-digest', data: { valid: true } };
+    const existingEntry = {
+      id: page.id,
+      digest: 'previous-digest',
+      data: { valid: true },
+      rendered: {
+        html: '<p>Previous content</p>',
+        metadata: { imagePaths: ['previous-image.png'], headings: [] },
+      },
+      filePath: `${VIRTUAL_CONTENT_ROOT}/${page.id}.md`,
+      assetImports: ['previous-image.png'],
+    };
     const store = createStore([existingEntry]);
     const parseData = vi.fn(async () => ({ valid: false }));
     const loader = notionLoader({ auth: 'token', data_source_id: 'ds-1' }) as LoaderWithSchema;
@@ -357,6 +367,35 @@ describe('notionLoader', () => {
 
     expect(store.set).not.toHaveBeenCalled();
     expect(store.entries.get(page.id)).toBe(existingEntry);
+  });
+
+  it('does not create an entry when its first render rejects', async () => {
+    const page = createPage();
+    notionApi.queryResults = [page];
+
+    vi.spyOn(NotionPageRenderer.prototype, 'getPageData').mockResolvedValue({
+      id: page.id,
+      data: {
+        icon: page.icon,
+        cover: page.cover,
+        archived: page.archived,
+        in_trash: page.in_trash,
+        url: page.url,
+        public_url: page.public_url,
+        properties: page.properties,
+      },
+    } as never);
+    const renderingError = new Error('Rendering failed');
+    vi.spyOn(NotionPageRenderer.prototype, 'render').mockRejectedValue(renderingError);
+
+    const store = createStore();
+    const parseData = vi.fn(async () => ({ valid: true }));
+    const loader = notionLoader({ auth: 'token', data_source_id: 'ds-1' }) as LoaderWithSchema;
+
+    await expect(loader.load({ store, logger: createLogger(), parseData } as never)).rejects.toBe(renderingError);
+
+    expect(store.set).not.toHaveBeenCalled();
+    expect(store.entries.has(page.id)).toBe(false);
   });
 
   it('forwards in_trash to the data source query', async () => {
