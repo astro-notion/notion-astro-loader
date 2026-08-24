@@ -22,6 +22,7 @@ jobs:
       id-token: write
     outputs:
       prerelease: ${{ steps.release.outputs.prerelease }}
+      release_notes: ${{ steps.release.outputs.release_notes }}
     steps:
       - name: Checkout tagged source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -67,13 +68,20 @@ jobs:
           if [[ "$version_without_build" == *-* ]]; then
             prerelease=true
             dist_tag=next
+            release_notes=
           else
             prerelease=false
             dist_tag=latest
+            release_notes="docs/releases/${package_version}.md"
+            if [[ ! -s "$release_notes" ]]; then
+              echo "Stable release notes are missing or empty: ${release_notes}" >&2
+              exit 1
+            fi
           fi
 
           echo "prerelease=${prerelease}" >> "$GITHUB_OUTPUT"
           echo "dist_tag=${dist_tag}" >> "$GITHUB_OUTPUT"
+          echo "release_notes=${release_notes}" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -106,14 +114,18 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Create generated release
+      - name: Checkout tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          release_options=(--generate-notes)
           if [[ "${{ needs.publish.outputs.prerelease }}" == "true" ]]; then
-            release_options+=(--prerelease)
+            release_options=(--generate-notes --prerelease)
+          else
+            release_options=(--notes-file "${{ needs.publish.outputs.release_notes }}")
           fi
 
           gh release create "$GITHUB_REF_NAME" "${release_options[@]}" --repo "$GITHUB_REPOSITORY" --verify-tag

@@ -10,6 +10,8 @@
 
 This release line targets `astro@>=6 <8` and Node.js `>=22.13.0`.
 
+Upgrading from `1.1.2`? Read the [2.0 migration guide](docs/migrations/2.0.md) and [2.0.0 release notes](docs/releases/2.0.0.md).
+
 Contributions are welcome. See [Contributing and Releasing](docs/CONTRIBUTING.md) for contributor expectations and the canonical maintainer release procedure.
 
 ## Installation
