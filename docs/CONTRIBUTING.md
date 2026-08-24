@@ -82,6 +82,19 @@ pnpm build
 git status --short
 ```
 
+Every stable release requires a non-empty curated note at `docs/releases/<version>.md`, where `<version>` exactly matches the unprefixed package version. Add and review that file before creating the release commit. A stable major release also requires a consumer migration guide at `docs/migrations/<major>.0.md` from the previous npm `latest` version.
+
+Set the intended version and verify the required documents before running `pnpm version`. For a stable major release, run both checks:
+
+```sh
+NEXT_VERSION=2.0.0
+test -s "docs/releases/${NEXT_VERSION}.md"
+NEXT_MAJOR=${NEXT_VERSION%%.*}
+test -s "docs/migrations/${NEXT_MAJOR}.0.md"
+```
+
+For a stable minor or patch release, only the exact release-note check is required. Prereleases continue to use generated GitHub notes and do not require a checked-in release-note file.
+
 Choose exactly one version command. `pnpm version` creates the release commit and matching annotated `v<version>` tag.
 
 For a stable patch release:
@@ -103,6 +116,7 @@ Use an explicit version such as `pnpm version 2.1.0-beta.0` when starting a new 
 ```sh
 VERSION=$(node -p "require('./package.json').version")
 git show --stat "v${VERSION}"
+if [[ "$VERSION" != *-* ]]; then test -s "docs/releases/${VERSION}.md"; fi
 git push --atomic origin main "v${VERSION}"
 ```
 
@@ -135,7 +149,7 @@ npm view @astro-notion/loader@2.0.0-beta.1 version
 gh release view v2.0.0-beta.1
 ```
 
-For the first beta, `latest` must remain `1.1.2`, `next` must become `2.0.0-beta.1`, and the npm package page must display provenance. The GitHub Release must contain generated notes and be marked as a prerelease. Stable releases must update `latest`; prereleases must update `next` without changing `latest`.
+For the first beta, `latest` must remain `1.1.2`, `next` must become `2.0.0-beta.1`, and the npm package page must display provenance. The GitHub Release must contain generated notes and be marked as a prerelease. Stable releases must update `latest` and use the exact checked-in `docs/releases/<version>.md`; prereleases must update `next` without changing `latest`.
 
 ## Recover a Failed Release
 
@@ -172,10 +186,13 @@ Do not rerun npm publication. Rerun only the failed `Create GitHub Release` job,
 
 ```sh
 VERSION=$(node -p "require('./package.json').version")
-gh release create "v${VERSION}" --generate-notes --prerelease --verify-tag
+if [[ "$VERSION" == *-* ]]; then
+  gh release create "v${VERSION}" --generate-notes --prerelease --verify-tag
+else
+  test -s "docs/releases/${VERSION}.md"
+  gh release create "v${VERSION}" --notes-file "docs/releases/${VERSION}.md" --verify-tag
+fi
 ```
-
-Omit `--prerelease` for a stable version.
 
 ### A published version is bad
 
