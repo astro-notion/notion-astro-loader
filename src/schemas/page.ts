@@ -2,6 +2,10 @@ import { z } from 'astro/zod';
 import { externalPropertyResponse, filePropertyResponse } from './file.js';
 
 export const pageObjectSchema = z.object({
+  // `.catch(null)` keeps a page in the collection when Notion introduces an
+  // icon or cover type this union does not know (e.g. `custom_emoji`);
+  // without it one unrecognized icon fails the schema and silently drops the
+  // whole page from the build.
   icon: z
     .discriminatedUnion('type', [
       externalPropertyResponse,
@@ -11,8 +15,9 @@ export const pageObjectSchema = z.object({
         emoji: z.string(),
       }),
     ])
-    .nullable(),
-  cover: z.discriminatedUnion('type', [externalPropertyResponse, filePropertyResponse]).nullable(),
+    .nullable()
+    .catch(null),
+  cover: z.discriminatedUnion('type', [externalPropertyResponse, filePropertyResponse]).nullable().catch(null),
   archived: z.boolean(),
   in_trash: z.boolean(),
   url: z.string().url(),
