@@ -58,6 +58,36 @@ describe('exported schemas', () => {
     expect(parsed.properties.Updated.last_edited_time).toBe('2026-04-25T11:30:00.000+00:00');
   });
 
+  it('parses unrecognized icon and cover types to null instead of failing the page', () => {
+    const schema = notionPageSchema({ properties: z.object({}).passthrough() });
+
+    // `custom_emoji` is a real icon type Notion added after this union was
+    // written; any future type should degrade the same way.
+    const parsed = schema.parse(
+      createPage({
+        icon: {
+          type: 'custom_emoji',
+          custom_emoji: { id: 'emoji-1', name: 'wave', url: 'https://example.com/wave.png' },
+        },
+        cover: { type: 'unrecognized_future_type' },
+      })
+    );
+
+    expect(parsed.icon).toBeNull();
+    expect(parsed.cover).toBeNull();
+
+    // Recognized values still pass through untouched.
+    const recognized = schema.parse(
+      createPage({
+        icon: { type: 'emoji', emoji: '🌊' },
+        cover: { type: 'external', external: { url: 'https://example.com/cover.jpg' } },
+      })
+    );
+
+    expect(recognized.icon).toEqual({ type: 'emoji', emoji: '🌊' });
+    expect(recognized.cover).toEqual({ type: 'external', external: { url: 'https://example.com/cover.jpg' } });
+  });
+
   it('preserves transformed outputs for representative URL, date, and datetime properties', () => {
     expect(
       transformedPropertySchema.url.parse({
