@@ -290,7 +290,7 @@ export class NotionPageRenderer {
    * Return rendered HTML for the page.
    *
    * @param process Processor function to transform Notion blocks into HTML.
-   * This is created once for all pages then shared.
+   * Each invocation gets isolated rendering metadata, so sharing it across pages is safe.
    * @returns Rendered HTML and metadata.
    */
   async render(process: ReturnType<typeof buildProcessor>): Promise<RenderedNotionEntry> {
