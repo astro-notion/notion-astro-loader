@@ -1,12 +1,10 @@
 # @astro-notion/loader
 
-> **Notice**
->
-> This is a fork version of [NotWood's Notion Loader](https://github.com/NotWoods/travel/tree/main/packages/notion-astro-loader) aiming to fix bugs when working with image assets in Notion pages.
->
-> It's currently experimental, and when it's ready, it will be merged into the original repo. If you are in trouble with the same [image issue](https://github.com/withastro/astro/issues/12689), you can try this loader as a drop-in replacement.
-
 [Notion](https://developers.notion.com/) loader for the [Astro Content Layer API](https://docs.astro.build/en/guides/content-collections/). It allows you to load pages from a Notion data source, then render them as entries in a collection.
+
+> **History**
+>
+> This package began as a fork of [NotWood's Notion Loader](https://github.com/NotWoods/travel/tree/main/packages/notion-astro-loader) to fix image-asset handling (see the original [image issue](https://github.com/withastro/astro/issues/12689)). It is now maintained as `@astro-notion/loader`.
 
 This release line targets `astro@>=6 <8` and Node.js `>=22.13.0`.
 
