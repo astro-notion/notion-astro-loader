@@ -150,6 +150,18 @@ export function notionLoader({
 
       log_db.info(`Loading datasource ${dim(`found ${existingPageIds.size} pages in store`)}`);
 
+      const projectRoot = config ? fileURLToPath(config.root) : process.cwd();
+      const realSavePath = path.resolve(projectRoot, 'src', imageSavePath);
+      const publicRoot = config ? fileURLToPath(config.publicDir) : path.resolve(projectRoot, 'public');
+      const realPublicPath = publicPath ? path.resolve(projectRoot, publicPath) : publicRoot;
+      const relativePublicPath = path.relative(publicRoot, realPublicPath);
+      const isOutsidePublic = relativePublicPath === '..' || relativePublicPath.startsWith(`..${path.sep}`);
+      if (isOutsidePublic || path.isAbsolute(relativePublicPath)) {
+        throw new Error(`publicPath must resolve inside ${publicRoot}`);
+      }
+
+      const publicAssetUrlPath = path.posix.join(config?.base ?? '/', relativePublicPath.split(path.sep).join('/'));
+
       const pages = iteratePaginatedAPI(notionClient.dataSources.query, pageQuery);
       let pageCount = 0;
 
@@ -166,17 +178,6 @@ export function notionLoader({
         const existingPage = store.get(page.id);
 
         if (existingPage?.digest !== page.last_edited_time || process.env.FORCE_RERENDER) {
-          const projectRoot = config ? fileURLToPath(config.root) : process.cwd();
-          const realSavePath = path.resolve(projectRoot, 'src', imageSavePath);
-          const publicRoot = config ? fileURLToPath(config.publicDir) : path.resolve(projectRoot, 'public');
-          const realPublicPath = publicPath ? path.resolve(projectRoot, publicPath) : publicRoot;
-          const relativePublicPath = path.relative(publicRoot, realPublicPath);
-          const isOutsidePublic = relativePublicPath === '..' || relativePublicPath.startsWith(`..${path.sep}`);
-          if (isOutsidePublic || path.isAbsolute(relativePublicPath)) {
-            throw new Error(`publicPath must resolve inside ${publicRoot}`);
-          }
-
-          const publicAssetUrlPath = path.posix.join(config?.base ?? '/', relativePublicPath.split(path.sep).join('/'));
           const renderer = new NotionPageRenderer(
             notionClient,
             page,
