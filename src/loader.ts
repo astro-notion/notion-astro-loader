@@ -178,7 +178,8 @@ export function notionLoader({
       }
 
       const existingPageIds = new Set<string>(store.keys());
-      const renderPromises: Promise<void>[] = [];
+      const pageFailures: Array<{ pageId: string; error: unknown }> = [];
+      let renderedPageCount = 0;
 
       log_db.info(`Loading datasource ${dim(`found ${existingPageIds.size} pages in store`)}`);
 
@@ -205,23 +206,24 @@ export function notionLoader({
         pageCount++;
 
         const log_pg = log_db.fork(`${log_db.label}/${page.id.slice(0, 6)}`);
-        const pageMetadata = getPageMetadata(page);
         const isCached = existingPageIds.delete(page.id);
         const existingPage = store.get(page.id);
 
-        if (existingPage?.digest !== page.last_edited_time || process.env.FORCE_RERENDER) {
-          const renderer = new NotionPageRenderer(
-            notionClient,
-            page,
-            realSavePath,
-            log_pg,
-            realPublicPath,
-            publicAssetUrlPath
-          );
-          const pageData = await renderer.getPageData(resolvedCacheImageInData, resolvedRootSourceAlias);
-          const data = await parseData(pageData);
+        try {
+          const pageMetadata = getPageMetadata(page);
+          if (existingPage?.digest !== page.last_edited_time || process.env.FORCE_RERENDER) {
+            const renderer = new NotionPageRenderer(
+              notionClient,
+              page,
+              realSavePath,
+              log_pg,
+              realPublicPath,
+              publicAssetUrlPath
+            );
+            const pageData = await renderer.getPageData(resolvedCacheImageInData, resolvedRootSourceAlias);
+            const data = await parseData(pageData);
+            const rendered = await renderer.render(processor);
 
-          const renderPromise = renderer.render(processor).then((rendered) => {
             store.set({
               id: page.id,
               digest: page.last_edited_time,
@@ -230,13 +232,15 @@ export function notionLoader({
               filePath: `${VIRTUAL_CONTENT_ROOT}/${page.id}.md`,
               assetImports: rendered.metadata.imagePaths,
             });
-          });
 
-          renderPromises.push(renderPromise);
-
-          log_pg.info(`${isCached ? 'Updated' : 'Created'} page ${dim(pageMetadata)}`);
-        } else {
-          log_pg.debug(`Skipped page ${dim(pageMetadata)}`);
+            renderedPageCount++;
+            log_pg.info(`${isCached ? 'Updated' : 'Created'} page ${dim(pageMetadata)}`);
+          } else {
+            log_pg.debug(`Skipped page ${dim(pageMetadata)}`);
+          }
+        } catch (error) {
+          log_pg.error(`Failed to load page ${page.id}: ${getErrorMessage(error)}`);
+          pageFailures.push({ pageId: page.id, error });
         }
       }
 
@@ -249,13 +253,17 @@ export function notionLoader({
 
       log_db.info(`Loaded datasource ${dim(`fetched ${pageCount} pages from API`)}`);
 
-      if (renderPromises.length === 0) {
-        return;
+      if (renderedPageCount > 0) {
+        log_db.info(`Rendered ${renderedPageCount} pages`);
       }
 
-      log_db.info(`Rendering ${renderPromises.length} updated pages`);
-      await Promise.all(renderPromises);
-      log_db.info(`Rendered ${renderPromises.length} pages`);
+      if (pageFailures.length > 0) {
+        const pageLabel = pageFailures.length === 1 ? 'page' : 'pages';
+        const failureSummary = pageFailures
+          .map(({ pageId, error }) => `${pageId}: ${getErrorMessage(error)}`)
+          .join('; ');
+        throw new Error(`Failed to load ${pageFailures.length} ${pageLabel}: ${failureSummary}`);
+      }
     },
   };
 }
@@ -301,4 +309,17 @@ ${propertyTypes}
 
 export type Entry = z.infer<ReturnType<typeof notionPageSchema<typeof propertiesSchema>>>;
   `.trim();
+}
+
+/**
+ * Convert an unknown page-processing failure into a concise message for logs and aggregation.
+ */
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  return 'Unknown error';
 }
