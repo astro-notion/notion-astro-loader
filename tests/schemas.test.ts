@@ -88,6 +88,13 @@ describe('exported schemas', () => {
     expect(recognized.cover).toEqual({ type: 'external', external: { url: 'https://example.com/cover.jpg' } });
   });
 
+  it('rejects malformed values for recognized icon and cover types', () => {
+    const schema = notionPageSchema({ properties: z.object({}).passthrough() });
+
+    expect(() => schema.parse(createPage({ icon: { type: 'emoji', emoji: 42 } }))).toThrow();
+    expect(() => schema.parse(createPage({ cover: { type: 'external', external: { url: 42 } } }))).toThrow();
+  });
+
   it('preserves transformed outputs for representative URL, date, and datetime properties', () => {
     expect(
       transformedPropertySchema.url.parse({

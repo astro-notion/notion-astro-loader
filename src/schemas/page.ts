@@ -1,23 +1,42 @@
 import { z } from 'astro/zod';
 import { externalPropertyResponse, filePropertyResponse } from './file.js';
 
+const KNOWN_ICON_TYPES = new Set(['external', 'file', 'emoji']);
+const KNOWN_COVER_TYPES = new Set(['external', 'file']);
+
+/** Replaces values with unsupported string type tags so known variants remain strictly validated. */
+function nullForUnrecognizedType(value: unknown, knownTypes: ReadonlySet<string>): unknown {
+  if (typeof value !== 'object' || value === null || !('type' in value)) {
+    return value;
+  }
+
+  const type = value.type;
+  if (typeof type !== 'string' || knownTypes.has(type)) {
+    return value;
+  }
+
+  return null;
+}
+
 export const pageObjectSchema = z.object({
-  // `.catch(null)` keeps a page in the collection when Notion introduces an
-  // icon or cover type this union does not know (e.g. `custom_emoji`);
-  // without it one unrecognized icon fails the schema and silently drops the
-  // whole page from the build.
-  icon: z
-    .discriminatedUnion('type', [
-      externalPropertyResponse,
-      filePropertyResponse,
-      z.object({
-        type: z.literal('emoji'),
-        emoji: z.string(),
-      }),
-    ])
-    .nullable()
-    .catch(null),
-  cover: z.discriminatedUnion('type', [externalPropertyResponse, filePropertyResponse]).nullable().catch(null),
+  // Notion can add icon and cover types; discard only unsupported type tags.
+  icon: z.preprocess(
+    (value) => nullForUnrecognizedType(value, KNOWN_ICON_TYPES),
+    z
+      .discriminatedUnion('type', [
+        externalPropertyResponse,
+        filePropertyResponse,
+        z.object({
+          type: z.literal('emoji'),
+          emoji: z.string(),
+        }),
+      ])
+      .nullable()
+  ),
+  cover: z.preprocess(
+    (value) => nullForUnrecognizedType(value, KNOWN_COVER_TYPES),
+    z.discriminatedUnion('type', [externalPropertyResponse, filePropertyResponse]).nullable()
+  ),
   archived: z.boolean(),
   in_trash: z.boolean(),
   url: z.string().url(),
