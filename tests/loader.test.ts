@@ -67,6 +67,7 @@ function createLogger(label = 'notion-loader') {
     label,
     info: vi.fn(),
     debug: vi.fn(),
+    warn: vi.fn(),
     fork: vi.fn((childLabel: string) => createLogger(childLabel)),
   };
 }
@@ -86,6 +87,30 @@ function createStore(initialEntries: Array<Record<string, any>> = []) {
       entries.delete(id);
     }),
   };
+}
+
+/** Loads one page with mocked rendering so loader option forwarding can be inspected. */
+async function loadPageWithOptions(options: Parameters<typeof notionLoader>[0]) {
+  const page = createPage();
+  notionApi.queryResults = [page];
+
+  const getPageData = vi
+    .spyOn(NotionPageRenderer.prototype, 'getPageData')
+    .mockResolvedValue({ id: page.id, data: {} } as never);
+  vi.spyOn(NotionPageRenderer.prototype, 'render').mockResolvedValue({
+    html: '<p>Page</p>',
+    metadata: { imagePaths: [], headings: [] },
+  });
+
+  const logger = createLogger();
+  const loader = notionLoader(options) as LoaderWithSchema;
+  await loader.load({
+    store: createStore(),
+    logger,
+    parseData: vi.fn(async (entry: unknown) => entry),
+  } as never);
+
+  return { getPageData, logger };
 }
 
 afterEach(() => {
@@ -193,6 +218,68 @@ describe('notionLoader', () => {
       filePath: `${VIRTUAL_CONTENT_ROOT}/${page.id}.md`,
       assetImports: rendered.metadata.imagePaths,
     });
+  });
+
+  it('prefers canonical asset options over deprecated aliases', async () => {
+    const { getPageData, logger } = await loadPageWithOptions({
+      auth: 'token',
+      data_source_id: 'ds-1',
+      cacheImageInData: false,
+      experimentalCacheImageInData: true,
+      rootSourceAlias: '',
+      experimentalRootSourceAlias: 'legacy',
+    });
+
+    expect(getPageData).toHaveBeenCalledWith(false, '');
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('enables page-data asset caching with canonical options', async () => {
+    const { getPageData, logger } = await loadPageWithOptions({
+      auth: 'token',
+      data_source_id: 'ds-1',
+      cacheImageInData: true,
+      rootSourceAlias: 'content',
+    });
+
+    expect(getPageData).toHaveBeenCalledWith(true, 'content');
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('falls back to deprecated aliases when canonical options are undefined', async () => {
+    const { getPageData, logger } = await loadPageWithOptions({
+      auth: 'token',
+      data_source_id: 'ds-1',
+      cacheImageInData: undefined,
+      experimentalCacheImageInData: false,
+      rootSourceAlias: undefined,
+      experimentalRootSourceAlias: '',
+    });
+
+    expect(getPageData).toHaveBeenCalledWith(false, '');
+    expect(logger.warn).toHaveBeenCalledTimes(2);
+  });
+
+  it('supports deprecated asset aliases and warns when they are effective', async () => {
+    const { getPageData, logger } = await loadPageWithOptions({
+      auth: 'token',
+      data_source_id: 'ds-1',
+      experimentalCacheImageInData: true,
+      experimentalRootSourceAlias: 'content',
+    });
+
+    expect(getPageData).toHaveBeenCalledWith(true, 'content');
+    expect(logger.warn).toHaveBeenCalledTimes(2);
+    expect(logger.warn).toHaveBeenNthCalledWith(1, expect.stringContaining('experimentalCacheImageInData'));
+    expect(logger.warn).toHaveBeenNthCalledWith(1, expect.stringContaining('cacheImageInData'));
+    expect(logger.warn).toHaveBeenNthCalledWith(2, expect.stringContaining('experimentalRootSourceAlias'));
+    expect(logger.warn).toHaveBeenNthCalledWith(2, expect.stringContaining('rootSourceAlias'));
+  });
+
+  it('preserves disabled asset-cache defaults', async () => {
+    const { getPageData } = await loadPageWithOptions({ auth: 'token', data_source_id: 'ds-1' });
+
+    expect(getPageData).toHaveBeenCalledWith(false, 'src');
   });
 
   it('skips rendering when the stored digest matches the Notion page', async () => {

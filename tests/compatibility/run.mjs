@@ -1,5 +1,7 @@
 /**
  * Runs the package compatibility contract against one exact Astro version.
+ * The staged loader tests pin one-major support for deprecated asset aliases
+ * alongside `archived` -> `in_trash` compatibility.
  */
 
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';

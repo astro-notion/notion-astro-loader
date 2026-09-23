@@ -123,7 +123,9 @@ The `notionLoader` function takes an object with the same options as `notionClie
 - `data_source_id`: The Notion data source ID to load pages from.
 - `imageSavePath`: The `src`-relative directory for downloaded images processed by Astro. Default is `assets/images/notion`.
 - `publicPath`: The project-relative directory for downloaded documents, PDFs, video, and audio served directly by Astro. It must be inside Astro's configured `publicDir` and defaults to `publicDir`.
-- `experimentalCacheImageInData`: Localizes hosted covers and icons under `imageSavePath` and hosted file properties under `publicPath`. External URLs remain unchanged. Default is `false`.
+- `cacheImageInData`: Localizes hosted covers and icons under `imageSavePath` and hosted file properties under `publicPath`. External URLs remain unchanged. Default is `false`.
+- `rootSourceAlias`: The root alias used for transformed cover image paths. Default is `src`.
+- `experimentalCacheImageInData` and `experimentalRootSourceAlias`: Deprecated aliases for `cacheImageInData` and `rootSourceAlias`, respectively. They remain supported for one major. When both a canonical option and its alias are supplied, the canonical option wins; an effective alias emits a deprecation warning.
 
 ## Advanced Utilities
 
@@ -137,7 +139,7 @@ Notion assets can use hosted `file` URLs or external URLs. The loader downloads 
 
 Hosted images in page content are cached below `src/<imageSavePath>` and registered with Astro's asset pipeline. Hosted documents, PDFs, video, and audio are cached below `publicPath` and rendered as URLs beneath Astro's configured base path. Keeping these destinations separate lets Astro optimize images without treating directly served files as image imports.
 
-Hosted covers, icons, and file properties retain their original URLs by default. Enable `experimentalCacheImageInData` to localize them using the same source-image and public-asset destinations. Alternatively, use the `fileToImageAsset` helper exported from `@astro-notion/loader` from server-side Astro code to convert a Notion image file object into a `GetImageResult`.
+Hosted covers, icons, and file properties retain their original URLs by default. Enable `cacheImageInData` to localize them using the same source-image and public-asset destinations. Use `rootSourceAlias` to control the root alias for transformed cover image paths. The deprecated `experimentalCacheImageInData` and `experimentalRootSourceAlias` aliases remain supported for one major; the canonical option wins when both names are supplied. Alternatively, use the `fileToImageAsset` helper exported from `@astro-notion/loader` from server-side Astro code to convert a Notion image file object into a `GetImageResult`.
 
 `fileToImageAsset` is a server-only helper under Astro 6 and Astro 7 because it calls `getImage()` from `astro:assets`. Use it in build-time or server execution paths such as content loaders, `.astro` frontmatter, endpoints, or other server code. Do not use it in hydrated client components or browser-only code.
 
