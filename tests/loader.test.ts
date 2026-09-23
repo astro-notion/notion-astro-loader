@@ -68,6 +68,7 @@ function createLogger(label = 'notion-loader') {
     info: vi.fn(),
     debug: vi.fn(),
     warn: vi.fn(),
+    error: vi.fn(),
     fork: vi.fn((childLabel: string) => createLogger(childLabel)),
   };
 }
@@ -473,16 +474,196 @@ describe('notionLoader', () => {
       },
     } as never);
     const renderingError = new Error('Rendering failed');
-    vi.spyOn(NotionPageRenderer.prototype, 'render').mockRejectedValue(renderingError);
+    const render = vi
+      .spyOn(NotionPageRenderer.prototype, 'render')
+      .mockRejectedValueOnce(renderingError)
+      .mockResolvedValueOnce({ html: '<p>Recovered</p>', metadata: { imagePaths: [], headings: [] } });
 
     const store = createStore();
     const parseData = vi.fn(async () => ({ valid: true }));
     const loader = notionLoader({ auth: 'token', data_source_id: 'ds-1' }) as LoaderWithSchema;
 
-    await expect(loader.load({ store, logger: createLogger(), parseData } as never)).rejects.toBe(renderingError);
+    await expect(loader.load({ store, logger: createLogger(), parseData } as never)).rejects.toThrow(
+      'Rendering failed'
+    );
 
     expect(store.set).not.toHaveBeenCalled();
     expect(store.entries.has(page.id)).toBe(false);
+
+    await loader.load({ store, logger: createLogger(), parseData } as never);
+
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(store.entries.get(page.id)).toMatchObject({ id: page.id, digest: page.last_edited_time });
+  });
+
+  it('processes successful pages around a failed render and aggregates the page failure', async () => {
+    const pageA = createPage({ id: 'page-a' });
+    const pageB = createPage({ id: 'page-b' });
+    const pageC = createPage({ id: 'page-c' });
+    notionApi.queryResults = [pageA, pageB, pageC];
+
+    const renderedA = { html: '<p>A</p>', metadata: { imagePaths: [], headings: [] } };
+    const renderedC = { html: '<p>C</p>', metadata: { imagePaths: [], headings: [] } };
+    vi.spyOn(NotionPageRenderer.prototype, 'getPageData')
+      .mockResolvedValueOnce({ id: pageA.id, data: {} } as never)
+      .mockResolvedValueOnce({ id: pageB.id, data: {} } as never)
+      .mockResolvedValueOnce({ id: pageC.id, data: {} } as never);
+    vi.spyOn(NotionPageRenderer.prototype, 'render')
+      .mockResolvedValueOnce(renderedA)
+      .mockRejectedValueOnce(new Error('B render failed'))
+      .mockResolvedValueOnce(renderedC);
+
+    const previousBEntry = { id: pageB.id, digest: 'previous-b-digest', data: { previous: true } };
+    const store = createStore([previousBEntry, { id: 'deleted-page', digest: 'deleted-digest' }]);
+    const logger = createLogger();
+    const pageLogger = createLogger('notion-loader/page-b');
+    logger.fork.mockImplementation((label) => (label === pageLogger.label ? pageLogger : createLogger(label)));
+    const loader = notionLoader({ auth: 'token', data_source_id: 'ds-1' }) as LoaderWithSchema;
+
+    await expect(
+      loader.load({
+        store,
+        logger,
+        parseData: vi.fn(async (entry: { id: string }) => ({ slug: entry.id })),
+      } as never)
+    ).rejects.toThrow('page-b: B render failed');
+
+    expect(store.entries.get(pageA.id)).toMatchObject({ id: pageA.id, digest: pageA.last_edited_time });
+    expect(store.entries.get(pageC.id)).toMatchObject({ id: pageC.id, digest: pageC.last_edited_time });
+    expect(store.entries.get(pageB.id)).toBe(previousBEntry);
+    expect(store.set.mock.calls.map(([entry]) => entry.id)).toEqual([pageA.id, pageC.id]);
+    expect(store.delete).toHaveBeenCalledWith('deleted-page');
+    expect(logger.fork).toHaveBeenCalledWith('notion-loader/page-b');
+    expect(pageLogger.error).toHaveBeenCalledWith('Failed to load page page-b: B render failed');
+  });
+
+  it('continues after a mid-loop getPageData failure without floating render rejections', async () => {
+    const pageA = createPage({ id: 'page-a' });
+    const pageB = createPage({ id: 'page-b' });
+    const pageC = createPage({ id: 'page-c' });
+    notionApi.queryResults = [pageA, pageB, pageC];
+
+    const unhandledRejections: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown) => unhandledRejections.push(reason);
+    const getPageData = vi
+      .spyOn(NotionPageRenderer.prototype, 'getPageData')
+      .mockResolvedValueOnce({ id: pageA.id, data: {} } as never)
+      .mockRejectedValueOnce(new Error('B page data failed'))
+      .mockResolvedValueOnce({ id: pageC.id, data: {} } as never);
+    const render = vi
+      .spyOn(NotionPageRenderer.prototype, 'render')
+      .mockRejectedValueOnce(new Error('A render failed'))
+      .mockResolvedValueOnce({ html: '<p>C</p>', metadata: { imagePaths: [], headings: [] } });
+    const store = createStore([{ id: 'deleted-page', digest: 'deleted-digest' }]);
+    const loader = notionLoader({ auth: 'token', data_source_id: 'ds-1' }) as LoaderWithSchema;
+
+    process.on('unhandledRejection', onUnhandledRejection);
+    try {
+      await expect(
+        loader.load({
+          store,
+          logger: createLogger(),
+          parseData: vi.fn(async (entry: { id: string }) => ({ slug: entry.id })),
+        } as never)
+      ).rejects.toThrow('page-a: A render failed; page-b: B page data failed');
+      await new Promise((resolve) => setImmediate(resolve));
+    } finally {
+      process.off('unhandledRejection', onUnhandledRejection);
+    }
+
+    expect(getPageData).toHaveBeenCalledTimes(3);
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(store.entries.has(pageC.id)).toBe(true);
+    expect(store.delete).toHaveBeenCalledWith('deleted-page');
+    expect(unhandledRejections).toEqual([]);
+  });
+
+  it('continues after a mid-loop parseData failure', async () => {
+    const pageA = createPage({ id: 'page-a' });
+    const pageB = createPage({ id: 'page-b' });
+    const pageC = createPage({ id: 'page-c' });
+    notionApi.queryResults = [pageA, pageB, pageC];
+
+    vi.spyOn(NotionPageRenderer.prototype, 'getPageData')
+      .mockResolvedValueOnce({ id: pageA.id, data: {} } as never)
+      .mockResolvedValueOnce({ id: pageB.id, data: {} } as never)
+      .mockResolvedValueOnce({ id: pageC.id, data: {} } as never);
+    const render = vi.spyOn(NotionPageRenderer.prototype, 'render').mockResolvedValue({
+      html: '<p>Page</p>',
+      metadata: { imagePaths: [], headings: [] },
+    });
+    const store = createStore([{ id: 'deleted-page', digest: 'deleted-digest' }]);
+    const parseData = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('A parse failed'))
+      .mockResolvedValueOnce({ slug: pageB.id })
+      .mockResolvedValueOnce({ slug: pageC.id });
+    const loader = notionLoader({ auth: 'token', data_source_id: 'ds-1' }) as LoaderWithSchema;
+
+    await expect(loader.load({ store, logger: createLogger(), parseData } as never)).rejects.toThrow(
+      'page-a: A parse failed'
+    );
+
+    expect(parseData).toHaveBeenCalledTimes(3);
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(store.entries.has(pageB.id)).toBe(true);
+    expect(store.entries.has(pageC.id)).toBe(true);
+    expect(store.delete).toHaveBeenCalledWith('deleted-page');
+  });
+
+  it('propagates a deletion error instead of swallowing it during page-failure aggregation', async () => {
+    const page = createPage();
+    notionApi.queryResults = [page];
+
+    vi.spyOn(NotionPageRenderer.prototype, 'getPageData').mockResolvedValue({ id: page.id, data: {} } as never);
+    vi.spyOn(NotionPageRenderer.prototype, 'render').mockRejectedValue(new Error('Page render failed'));
+
+    const deletionError = new Error('Deletion failed');
+    const store = createStore([
+      { id: 'deleted-page-a', digest: 'deleted-a' },
+      { id: 'deleted-page-b', digest: 'deleted-b' },
+    ]);
+    store.delete.mockImplementationOnce(() => {
+      throw deletionError;
+    });
+    const loader = notionLoader({ auth: 'token', data_source_id: 'ds-1' }) as LoaderWithSchema;
+
+    await expect(
+      loader.load({
+        store,
+        logger: createLogger(),
+        parseData: vi.fn(async (entry: unknown) => entry),
+      } as never)
+    ).rejects.toBe(deletionError);
+
+    expect(store.delete).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves the failed page digest so the next load retries it', async () => {
+    const page = createPage();
+    notionApi.queryResults = [page];
+
+    vi.spyOn(NotionPageRenderer.prototype, 'getPageData').mockResolvedValue({ id: page.id, data: {} } as never);
+    const render = vi
+      .spyOn(NotionPageRenderer.prototype, 'render')
+      .mockRejectedValueOnce(new Error('Retryable render failure'))
+      .mockResolvedValueOnce({ html: '<p>Recovered</p>', metadata: { imagePaths: [], headings: [] } });
+    const previousEntry = { id: page.id, digest: 'previous-digest', data: { previous: true } };
+    const store = createStore([previousEntry]);
+    const loader = notionLoader({ auth: 'token', data_source_id: 'ds-1' }) as LoaderWithSchema;
+    const parseData = vi.fn(async () => ({ current: true }));
+
+    await expect(loader.load({ store, logger: createLogger(), parseData } as never)).rejects.toThrow(
+      'Retryable render failure'
+    );
+    expect(store.set).not.toHaveBeenCalled();
+    expect(store.entries.get(page.id)).toBe(previousEntry);
+
+    await loader.load({ store, logger: createLogger(), parseData } as never);
+
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(store.set).toHaveBeenCalledOnce();
+    expect(store.entries.get(page.id)).toMatchObject({ id: page.id, digest: page.last_edited_time });
   });
 
   it('forwards in_trash to the data source query', async () => {
