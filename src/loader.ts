@@ -45,10 +45,18 @@ export interface NotionLoaderOptions
    * Whether to cache hosted covers, icons, and file properties in page data.
    * Defaults to `false`.
    */
+  cacheImageInData?: boolean;
+  /**
+   * @deprecated Use `cacheImageInData` instead.
+   */
   experimentalCacheImageInData?: boolean;
   /**
-   * The root alias for the images.
+   * The root alias for transformed cover image paths.
    * Defaults to `src`.
+   */
+  rootSourceAlias?: string;
+  /**
+   * @deprecated Use `rootSourceAlias` instead.
    */
   experimentalRootSourceAlias?: string;
   /**
@@ -98,10 +106,27 @@ export function notionLoader({
   publicPath,
   imageSavePath = DEFAULT_IMAGE_SAVE_PATH,
   rehypePlugins = [],
-  experimentalCacheImageInData = false,
-  experimentalRootSourceAlias = 'src',
+  cacheImageInData,
+  experimentalCacheImageInData,
+  rootSourceAlias,
+  experimentalRootSourceAlias,
   ...clientOptions
 }: NotionLoaderOptions): Loader {
+  const useLegacyCacheImageInData = cacheImageInData === undefined && experimentalCacheImageInData !== undefined;
+  const resolvedCacheImageInData =
+    cacheImageInData !== undefined
+      ? cacheImageInData
+      : experimentalCacheImageInData !== undefined
+        ? experimentalCacheImageInData
+        : false;
+  const useLegacyRootSourceAlias = rootSourceAlias === undefined && experimentalRootSourceAlias !== undefined;
+  const resolvedRootSourceAlias =
+    rootSourceAlias !== undefined
+      ? rootSourceAlias
+      : experimentalRootSourceAlias !== undefined
+        ? experimentalRootSourceAlias
+        : 'src';
+
   const notionClient = new Client(clientOptions);
 
   const resolvedRehypePlugins = Promise.all(
@@ -145,6 +170,13 @@ export function notionLoader({
     async load(ctx) {
       const { config, store, logger: log_db, parseData } = ctx;
 
+      if (useLegacyCacheImageInData) {
+        log_db.warn('`experimentalCacheImageInData` is deprecated; use `cacheImageInData` instead.');
+      }
+      if (useLegacyRootSourceAlias) {
+        log_db.warn('`experimentalRootSourceAlias` is deprecated; use `rootSourceAlias` instead.');
+      }
+
       const existingPageIds = new Set<string>(store.keys());
       const renderPromises: Promise<void>[] = [];
 
@@ -186,7 +218,7 @@ export function notionLoader({
             realPublicPath,
             publicAssetUrlPath
           );
-          const pageData = await renderer.getPageData(experimentalCacheImageInData, experimentalRootSourceAlias);
+          const pageData = await renderer.getPageData(resolvedCacheImageInData, resolvedRootSourceAlias);
           const data = await parseData(pageData);
 
           const renderPromise = renderer.render(processor).then((rendered) => {
